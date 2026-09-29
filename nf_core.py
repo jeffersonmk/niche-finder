@@ -39,16 +39,41 @@ def load_config() -> dict:
 def load_api_key() -> str:
     key = os.environ.get("YT_API_KEY", "").strip()
     if not key and ENV_FILE.exists():
+        _restrict(ENV_FILE)
+        _restrict(ENV_FILE.parent, 0o700)
         for line in ENV_FILE.read_text().splitlines():
             if line.strip().startswith("YT_API_KEY="):
                 key = line.split("=", 1)[1].strip().strip('"').strip("'")
     return key
 
 
+def _restrict(path: Path, mode: int = 0o600) -> None:
+    """Garante que só o dono consiga ler o arquivo/pasta (no Windows, chmod é ignorado)."""
+    try:
+        if os.name != "nt" and path.stat().st_mode & 0o077:
+            os.chmod(path, mode)
+    except OSError:
+        pass
+
+
 def save_api_key(key: str) -> None:
     ENV_FILE.parent.mkdir(parents=True, exist_ok=True)
-    ENV_FILE.write_text(f"YT_API_KEY={key.strip()}\n")
-    os.chmod(ENV_FILE, 0o600)
+    if os.name != "nt":
+        os.chmod(ENV_FILE.parent, 0o700)
+    # cria o arquivo já com permissão 600 (sem janela em que outros usuários poderiam lê-lo)
+    fd = os.open(ENV_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(f"YT_API_KEY={key.strip()}\n")
+    _restrict(ENV_FILE)
+
+
+def redact(text: str) -> str:
+    """Remove a chave de qualquer mensagem antes de exibi-la ou registrá-la."""
+    key = load_api_key()
+    text = str(text)
+    if key:
+        text = text.replace(key, "***")
+    return re.sub(r"(key=)[A-Za-z0-9_\-]{20,}", r"\1***", text)
 
 
 # ------------------------------------------------------------------ cota diária (reseta meia-noite do Pacífico)
@@ -106,12 +131,12 @@ class YouTube:
                 if e.code >= 500 and attempt < 2:
                     time.sleep(2 ** attempt)
                     continue
-                raise ApiError(f"Erro da API ({e.code}): {body[:300]}")
+                raise ApiError(redact(f"Erro da API ({e.code}): {body[:300]}"))
             except urllib.error.URLError as e:
                 if attempt < 2:
                     time.sleep(2 ** attempt)
                     continue
-                raise ApiError(f"Sem conexão com a API: {e.reason}")
+                raise ApiError(redact(f"Sem conexão com a API: {e.reason}"))
         raise ApiError("falha inesperada")
 
     def get(self, endpoint: str, **params) -> dict:

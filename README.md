@@ -72,7 +72,7 @@ Nenhuma biblioteca externa é necessária.
 ## Instalação
 
 ```bash
-git clone https://github.com/jeffersonmk/niche-finder.git
+git clone https://github.com/<seu-usuario>/niche-finder.git
 cd niche-finder
 ```
 
@@ -337,12 +337,14 @@ python3 tests/test_offline.py --serve     # http://127.0.0.1:8799
 
 ## Privacidade e segurança
 
-- A chave fica em `~/.config/niche-finder/.env` (permissão `600`), **fora do repositório**. O `.gitignore` também bloqueia qualquer arquivo `.env`.
-- O servidor aceita conexões só de `127.0.0.1` e recusa `POST` vindo de outros sites (proteção contra CSRF).
+- A chave fica em `~/.config/niche-finder/.env` (arquivo `600`, pasta `700`), **fora do repositório**. O `.gitignore` também bloqueia qualquer arquivo `.env`.
+- A chave **nunca é enviada ao navegador**: a interface só recebe `has_key: true/false`. Ela também não entra no cache nem nos dados salvos, e é removida de mensagens de erro e logs.
+- O servidor escuta só em `127.0.0.1`, recusa requisições com `Host` diferente de `127.0.0.1`/`localhost` (proteção contra DNS rebinding) e recusa chamadas vindas de outros sites (proteção contra CSRF).
 - Nenhum dado é enviado a terceiros: o app só conversa com `googleapis.com`.
 - `data/` e `cache/` guardam dados públicos do YouTube e não vão para o git.
+- Os testes em `tests/` verificam cada um desses pontos (classe `SecurityTest`).
 
-> ⚠️ **Nunca publique sua chave.** Se ela vazar, apague-a no Google Cloud Console e crie outra.
+> ⚠️ **Nunca publique sua chave.** Se ela vazar, apague-a no Google Cloud Console e crie outra. Restringir a chave à YouTube Data API v3 limita o estrago caso isso aconteça.
 
 ## Limitações conhecidas
 

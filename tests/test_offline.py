@@ -149,6 +149,76 @@ class NicheFinderTest(unittest.TestCase):
         self.assertGreater(core.quota_status()["used"], 0)
 
 
+class SecurityTest(unittest.TestCase):
+    """A chave nunca pode sair do arquivo .env: nem para o navegador, nem para cache, nem para mensagens de erro."""
+
+    FAKE_KEY = "AIzaSyTESTE_chave_falsa_1234567890abcd"
+
+    def setUp(self):
+        import os
+        import threading
+        import server
+        self.tmp = use_temp_storage()
+        self._env_file, self._env_var = core.ENV_FILE, os.environ.pop("YT_API_KEY", None)
+        core.ENV_FILE = self.tmp / "cfg" / ".env"
+        server.FETCH = fake_api
+        self.srv = server.ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+        self.port = self.srv.server_address[1]
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+
+    def tearDown(self):
+        import os
+        self.srv.shutdown()
+        core.ENV_FILE = self._env_file
+        if self._env_var is not None:
+            os.environ["YT_API_KEY"] = self._env_var
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def req(self, path, body=None, headers=None):
+        import urllib.error
+        import urllib.request
+        data = json.dumps(body).encode() if body is not None else None
+        r = urllib.request.Request(f"http://127.0.0.1:{self.port}{path}", data=data,
+                                   headers={"Content-Type": "application/json", **(headers or {})})
+        try:
+            with urllib.request.urlopen(r) as resp:
+                return resp.status, resp.read().decode()
+        except urllib.error.HTTPError as e:
+            return e.code, e.read().decode()
+
+    def test_key_file_is_private(self):
+        import os
+        core.save_api_key(self.FAKE_KEY)
+        if os.name != "nt":
+            self.assertEqual(core.ENV_FILE.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(core.ENV_FILE.parent.stat().st_mode & 0o777, 0o700)
+
+    def test_key_never_returned_to_browser_nor_cached(self):
+        code, _ = self.req("/api/key", {"key": self.FAKE_KEY})
+        self.assertEqual(code, 200)
+        code, body = self.req("/api/state")
+        self.assertEqual(code, 200)
+        self.assertNotIn(self.FAKE_KEY, body)
+        self.assertIn('"has_key": true', body)
+        core.full_scan(core.YouTube(self.FAKE_KEY, fetch=fake_api), core.load_config(), ["pt"], ["musica"], 30)
+        for f in self.tmp.rglob("*"):
+            if f.is_file() and f != core.ENV_FILE:
+                self.assertNotIn(self.FAKE_KEY, f.read_text(errors="ignore"), f"chave vazou em {f}")
+
+    def test_errors_are_redacted(self):
+        core.save_api_key(self.FAKE_KEY)
+        msg = core.redact(f"falhou em https://www.googleapis.com/youtube/v3/search?q=x&key={self.FAKE_KEY}")
+        self.assertNotIn(self.FAKE_KEY, msg)
+
+    def test_other_sites_are_blocked(self):
+        # CSRF: outro site tentando gravar/usar a chave
+        code, _ = self.req("/api/key", {"key": self.FAKE_KEY}, {"Origin": "https://site-malicioso.com"})
+        self.assertEqual(code, 403)
+        # DNS rebinding: domínio externo apontado para 127.0.0.1
+        code, _ = self.req("/api/state", headers={"Host": f"site-malicioso.com:{self.port}"})
+        self.assertEqual(code, 403)
+
+
 def serve_demo(port: int = 8799):
     """Sobe a interface com dados de demonstração."""
     import server

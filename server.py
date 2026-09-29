@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 import threading
 import traceback
 import uuid
@@ -38,10 +39,10 @@ def start_job(kind: str, fn) -> str:
             job["status"] = "done"
             job["message"] = f"{len(job['results'])} canais encontrados"
         except core.ApiError as e:
-            job.update(status="error", error=str(e))
+            job.update(status="error", error=core.redact(e))
         except Exception as e:  # noqa: BLE001
-            traceback.print_exc()
-            job.update(status="error", error=f"Erro inesperado: {e}")
+            print(core.redact(traceback.format_exc()), file=sys.stderr)
+            job.update(status="error", error=core.redact(f"Erro inesperado: {e}"))
 
     threading.Thread(target=run, daemon=True).start()
     return jid
@@ -64,16 +65,24 @@ class Handler(BaseHTTPRequestHandler):
         return json.loads(self.rfile.read(n) or b"{}")
 
     def _local_only(self) -> bool:
-        # bloqueia requisições de outros sites (CSRF) às rotas que gastam cota ou gravam a chave
-        origin = self.headers.get("Origin")
+        """Só aceita requisições feitas para 127.0.0.1/localhost e, se houver Origin, vindas da própria página.
+
+        Checar o Host bloqueia "DNS rebinding" (um site malicioso apontando o próprio domínio para 127.0.0.1);
+        checar o Origin bloqueia CSRF (outro site mandando POST para o servidor local).
+        """
         host = self.headers.get("Host", "")
-        if origin and urlparse(origin).netloc != host:
+        port = self.server.server_address[1]
+        allowed = {f"127.0.0.1:{port}", f"localhost:{port}"}
+        origin = self.headers.get("Origin")
+        if host not in allowed or (origin and urlparse(origin).netloc not in allowed):
             self._json({"error": "origem não permitida"}, 403)
             return False
         return True
 
     # ---------------------------------------------------------------- GET
     def do_GET(self):
+        if not self._local_only():
+            return
         u = urlparse(self.path)
         q = {k: v[0] for k, v in parse_qs(u.query).items()}
         cfg = core.load_config()
