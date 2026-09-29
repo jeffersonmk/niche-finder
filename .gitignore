@@ -1,0 +1,17 @@
+# Chave da API e dados locais — nunca publicar
+.env
+*.env
+data/
+cache/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Sistema / editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

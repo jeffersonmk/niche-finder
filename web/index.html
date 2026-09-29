@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Niche Finder</title>
+<link rel="stylesheet" href="style.css">
+<script>document.documentElement.dataset.theme = localStorage.getItem("nf-theme") || "light";</script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <h1>Niche Finder</h1>
+    <p class="muted" id="subtitle">Canais novos e pequenos performando bem</p>
+  </div>
+  <form class="search" id="searchForm">
+    <input id="q" type="search" placeholder="Buscar pelo nome do vídeo ou do canal" autocomplete="off">
+    <button class="btn primary" type="submit" title="Busca no YouTube canais novos com vídeos sobre esse tema">Buscar no YouTube</button>
+  </form>
+  <div class="actions">
+    <button class="btn" id="scanBtn">↻ Varredura</button>
+    <button class="icon-btn" id="themeBtn" title="Alternar tema claro/escuro" aria-label="Alternar tema"></button>
+    <button class="icon-btn" id="settingsBtn" title="Configurações" aria-label="Configurações">⚙</button>
+  </div>
+</header>
+
+<section class="toolbar">
+  <div class="chips" id="genreChips"></div>
+  <div class="toolbar-right">
+    <select id="langSel"></select>
+    <select id="sortSel">
+      <option value="score">Maior nota</option>
+      <option value="views_per_day">Mais views/dia</option>
+      <option value="views_per_sub">Mais views/inscrito</option>
+      <option value="subs_per_day">Mais inscritos/dia</option>
+      <option value="age_days_asc">Mais novos</option>
+      <option value="subscribers_asc">Menos inscritos</option>
+    </select>
+  </div>
+</section>
+
+<div class="status" id="status" hidden><span class="spinner"></span><span id="statusText"></span></div>
+<div class="banner" id="banner" hidden></div>
+
+<section class="similar-panel" id="similarPanel" hidden>
+  <div class="similar-head">
+    <h2 id="similarTitle"></h2>
+    <button class="btn" id="closeSimilar">Fechar</button>
+  </div>
+  <div class="grid" id="similarGrid"></div>
+</section>
+
+<main class="grid" id="grid"></main>
+<div class="empty" id="empty" hidden></div>
+
+<footer class="muted foot" id="foot"></footer>
+
+<dialog id="settings">
+  <form method="dialog" class="modal">
+    <h2>Configurações</h2>
+    <label class="field">Chave da YouTube Data API v3
+      <input id="keyInput" type="password" placeholder="Cole aqui sua chave" autocomplete="off">
+      <small class="muted" id="keyState"></small>
+    </label>
+    <p class="muted small">A chave fica salva só neste computador, em <code>~/.config/niche-finder/.env</code>.</p>
+    <div class="field">Idiomas da varredura
+      <div class="chips" id="scanLangs"></div>
+    </div>
+    <div class="field">Modo da varredura
+      <select id="scanMode">
+        <option value="channel">Padrão — busca canais criados no período</option>
+        <option value="both">Completo — canais + vídeos em alta (gasta o dobro)</option>
+      </select>
+      <small class="muted" id="costHint"></small>
+    </div>
+    <div class="field" id="criteria"></div>
+    <div class="modal-actions">
+      <button class="btn" value="cancel">Fechar</button>
+      <button class="btn primary" id="saveKey" value="default">Salvar chave</button>
+    </div>
+  </form>
+</dialog>
+
+<template id="cardTpl">
+  <article class="card">
+    <div class="card-head">
+      <img class="avatar" alt="" loading="lazy">
+      <div class="head-text">
+        <a class="name" target="_blank" rel="noopener"></a>
+        <div class="big"><b class="views"></b> <span class="muted">views</span></div>
+      </div>
+      <span class="score" title="Nota de oportunidade (0–100)"></span>
+    </div>
+    <div class="metrics"></div>
+    <div class="spark-label muted"><span>Views por vídeo (do 1º ao último)</span><span class="age"></span></div>
+    <div class="spark"></div>
+    <div class="top-head"><b>Top vídeos</b><span class="muted">Views</span></div>
+    <ul class="top"></ul>
+    <div class="tags"></div>
+    <button class="btn similar-btn">🌐 Similares em outros idiomas</button>
+  </article>
+</template>
+
+<script src="app.js"></script>
+</body>
+</html>

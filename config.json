@@ -1,0 +1,295 @@
+{
+  "max_channel_age_days": 30,
+  "min_subscribers": 1000,
+  "max_subscribers": 100000,
+  "min_total_views": 100000,
+  "min_views_per_sub": 10,
+  "min_genre_match": 0.5,
+  "min_keyword_match": 0.3,
+  "results_per_search": 50,
+  "similar_max_concepts": 2,
+  "scan_languages": [
+    "pt",
+    "en"
+  ],
+  "languages": {
+    "pt": {
+      "label": "Português",
+      "regionCode": "BR",
+      "relevanceLanguage": "pt"
+    },
+    "en": {
+      "label": "Inglês",
+      "regionCode": "US",
+      "relevanceLanguage": "en"
+    },
+    "es": {
+      "label": "Espanhol",
+      "regionCode": "MX",
+      "relevanceLanguage": "es"
+    }
+  },
+  "categories": {
+    "musica": {
+      "label": "Música",
+      "search_category_id": "10",
+      "youtube_category_ids": [
+        "10"
+      ],
+      "concepts": {
+        "relaxante": {
+          "pt": "música relaxante",
+          "en": "relaxing music",
+          "es": "música relajante"
+        },
+        "dormir": {
+          "pt": "música para dormir",
+          "en": "sleep music",
+          "es": "música para dormir"
+        },
+        "lofi": {
+          "pt": "lofi para estudar",
+          "en": "lofi hip hop study",
+          "es": "lofi para estudiar"
+        },
+        "gospel": {
+          "pt": "louvor gospel",
+          "en": "worship songs",
+          "es": "alabanzas cristianas"
+        },
+        "phonk": {
+          "pt": "phonk brasileiro",
+          "en": "phonk music",
+          "es": "phonk música"
+        }
+      },
+      "keywords": []
+    },
+    "documentario": {
+      "label": "Documentário",
+      "youtube_category_ids": [
+        "27",
+        "1",
+        "22",
+        "24",
+        "25",
+        "19",
+        "28"
+      ],
+      "concepts": {
+        "completo": {
+          "pt": "documentário completo",
+          "en": "full documentary",
+          "es": "documental completo"
+        },
+        "historia": {
+          "pt": "história antiga documentário",
+          "en": "ancient history documentary",
+          "es": "historia antigua documental"
+        },
+        "crime": {
+          "pt": "casos reais crime",
+          "en": "true crime story",
+          "es": "casos reales crimen"
+        },
+        "misterios": {
+          "pt": "mistérios não resolvidos",
+          "en": "unsolved mysteries",
+          "es": "misterios sin resolver"
+        },
+        "guerra": {
+          "pt": "segunda guerra mundial documentário",
+          "en": "world war 2 documentary",
+          "es": "segunda guerra mundial documental"
+        }
+      },
+      "keywords": [
+        "documentario",
+        "documentary",
+        "documental",
+        "historia",
+        "history",
+        "misterio",
+        "mystery",
+        "mysteries",
+        "crime",
+        "caso",
+        "casos",
+        "case",
+        "guerra",
+        "war",
+        "civiliza",
+        "ancient",
+        "antig",
+        "investiga",
+        "true story",
+        "real story",
+        "verdade",
+        "biografia",
+        "biography",
+        "desapareci",
+        "disappear",
+        "tragedia",
+        "tragedy"
+      ]
+    },
+    "curiosidades": {
+      "label": "Curiosidades",
+      "youtube_category_ids": [
+        "27",
+        "28",
+        "24",
+        "22",
+        "1",
+        "15"
+      ],
+      "concepts": {
+        "fatos": {
+          "pt": "curiosidades incríveis",
+          "en": "interesting facts",
+          "es": "datos curiosos"
+        },
+        "voce_sabia": {
+          "pt": "você sabia",
+          "en": "did you know",
+          "es": "sabías que"
+        },
+        "espaco": {
+          "pt": "curiosidades do espaço",
+          "en": "space facts",
+          "es": "curiosidades del espacio"
+        },
+        "animais": {
+          "pt": "fatos sobre animais",
+          "en": "animal facts",
+          "es": "datos curiosos de animales"
+        },
+        "corpo": {
+          "pt": "curiosidades do corpo humano",
+          "en": "human body facts",
+          "es": "curiosidades del cuerpo humano"
+        }
+      },
+      "keywords": [
+        "curiosidade",
+        "curiosidad",
+        "curious",
+        "voce sabia",
+        "did you know",
+        "sabias",
+        "fato",
+        "fatos",
+        "fact",
+        "facts",
+        "dato",
+        "datos",
+        "incrive",
+        "increible",
+        "amazing",
+        "bizarr",
+        "estranh",
+        "strange",
+        "weird",
+        "espaco",
+        "space",
+        "espacio",
+        "universo",
+        "universe",
+        "animais",
+        "animal",
+        "corpo humano",
+        "human body",
+        "cuerpo",
+        "top 10",
+        "segredo",
+        "secret",
+        "secreto"
+      ]
+    },
+    "ensino": {
+      "label": "Ensino",
+      "youtube_category_ids": [
+        "27",
+        "28",
+        "26"
+      ],
+      "concepts": {
+        "ingles": {
+          "pt": "aprenda inglês",
+          "en": "english lesson",
+          "es": "aprende inglés"
+        },
+        "matematica": {
+          "pt": "matemática fácil",
+          "en": "math tricks",
+          "es": "matemáticas fáciles"
+        },
+        "ciencia": {
+          "pt": "ciência explicada",
+          "en": "science explained",
+          "es": "ciencia explicada"
+        },
+        "historia": {
+          "pt": "aula de história",
+          "en": "history explained",
+          "es": "historia explicada"
+        },
+        "estudo": {
+          "pt": "dicas de estudo",
+          "en": "study tips",
+          "es": "consejos para estudiar"
+        }
+      },
+      "keywords": [
+        "aula",
+        "aprenda",
+        "aprender",
+        "aprende",
+        "lesson",
+        "learn",
+        "explica",
+        "explained",
+        "explain",
+        "matematica",
+        "math",
+        "ciencia",
+        "science",
+        "truque",
+        "trick",
+        "truco",
+        "tutorial",
+        "curso",
+        "course",
+        "ingles",
+        "english",
+        "estudo",
+        "estudar",
+        "study",
+        "estudiar",
+        "fracao",
+        "fraction",
+        "fraccion",
+        "multipli",
+        "raiz",
+        "root",
+        "formula",
+        "gramatica",
+        "grammar",
+        "vocabul",
+        "how to",
+        "como fazer",
+        "passo a passo",
+        "step by step",
+        "enem",
+        "vestibular",
+        "concurso",
+        "fisica",
+        "physics",
+        "quimica",
+        "chemistry",
+        "biologia",
+        "biology"
+      ]
+    }
+  }
+}
