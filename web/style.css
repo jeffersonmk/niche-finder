@@ -100,8 +100,32 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1
 /* similares */
 .similar-panel { border: 1px dashed var(--accent); border-radius: 14px; padding: 16px; margin-bottom: 22px; }
 .similar-panel[hidden] { display: none; }
-.similar-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.similar-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .similar-head h2 { margin: 0; font-size: 16px; }
+.similar-panel .plan-list { margin-bottom: 14px; }
+
+/* painel de busca por palavras-chave */
+.panel { background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; padding: 14px; margin-bottom: 16px; }
+.kw-row { display: flex; gap: 8px; }
+.kw-row input { flex: 1; min-width: 0; }
+.opts { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; margin-top: 10px; font-size: 13px; }
+.opt { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.opt select, .opt input { padding: 6px 8px; }
+.opt input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; }
+.num-in { width: 96px; }
+.sep { flex: 0 0 1px; align-self: stretch; background: var(--card-border); }
+.plan { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--card-border); font-size: 13px; display: grid; gap: 8px; }
+.plan[hidden] { display: none; }
+.plan-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.pq { background: var(--bg); border: 1px solid var(--card-border); border-radius: 7px; padding: 3px 8px; font-size: 12px; }
+.funnel { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; margin-bottom: 16px; color: var(--muted); }
+.funnel[hidden] { display: none; }
+.fstep { background: var(--chip); border-radius: 99px; padding: 3px 9px; cursor: help; }
+.fstep b { color: var(--fg); }
+.fstep.ok { background: var(--accent); color: var(--accent-fg); }
+.fstep.ok b { color: var(--accent-fg); }
+.filter { width: 300px; }
+.tag { max-width: 230px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
 .empty[hidden] { display: none; }
@@ -121,6 +145,7 @@ code { background: var(--chip); padding: 1px 5px; border-radius: 4px; font-size:
 
 @media (max-width: 720px) {
   body { padding: 0 14px 30px; }
-  .search { width: 100%; } .search input { flex: 1; width: auto; }
+  .kw-row { flex-direction: column; } .filter { width: 100%; }
+  .sep { display: none; }
   .toolbar-right { margin-left: 0; }
 }

@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Niche Finder</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="style.css">
 <script>document.documentElement.dataset.theme = localStorage.getItem("nf-theme") || "light";</script>
 </head>
@@ -11,43 +12,78 @@
 <header class="topbar">
   <div class="brand">
     <h1>Niche Finder</h1>
-    <p class="muted" id="subtitle">Canais novos e pequenos performando bem</p>
+    <p class="muted" id="subtitle">Canais novos performando bem</p>
   </div>
-  <form class="search" id="searchForm">
-    <input id="q" type="search" placeholder="Buscar pelo nome do vídeo ou do canal" autocomplete="off">
-    <button class="btn primary" type="submit" title="Busca no YouTube canais novos com vídeos sobre esse tema">Buscar no YouTube</button>
-  </form>
   <div class="actions">
-    <button class="btn" id="scanBtn">↻ Varredura</button>
+    <button class="btn" id="scanBtn" title="Busca os conceitos de todos os gêneros do config.json">↻ Varredura</button>
     <button class="icon-btn" id="themeBtn" title="Alternar tema claro/escuro" aria-label="Alternar tema"></button>
     <button class="icon-btn" id="settingsBtn" title="Configurações" aria-label="Configurações">⚙</button>
   </div>
 </header>
 
-<section class="toolbar">
-  <div class="chips" id="genreChips"></div>
-  <div class="toolbar-right">
-    <select id="langSel"></select>
-    <select id="sortSel">
-      <option value="score">Maior nota</option>
-      <option value="views_per_day">Mais views/dia</option>
-      <option value="views_per_sub">Mais views/inscrito</option>
-      <option value="subs_per_day">Mais inscritos/dia</option>
-      <option value="age_days_asc">Mais novos</option>
-      <option value="subscribers_asc">Menos inscritos</option>
-    </select>
+<!-- busca por palavras-chave no YouTube -->
+<section class="panel" id="kwPanel">
+  <form id="kwForm" class="kw-row">
+    <input id="kw" type="search" autocomplete="off"
+           placeholder="Palavras-chave ou nome de um vídeo — separe várias com vírgula (ex.: atmospheric jungle mix, liquid dnb)">
+    <button class="btn primary" type="submit">Buscar canais</button>
+  </form>
+  <div class="opts">
+    <label class="opt"><input type="checkbox" id="kwTranslate" checked> Traduzir e buscar também em:</label>
+    <div class="chips" id="kwLangs"></div>
   </div>
+  <div class="opts">
+    <label class="opt">Gênero
+      <select id="kwGenre"><option value="">Qualquer um dos 4</option></select>
+    </label>
+    <label class="opt">Duração dos vídeos
+      <select id="kwDuration">
+        <option value="">Qualquer</option>
+        <option value="long">Longos (&gt; 20 min) — mixes</option>
+        <option value="medium">Médios (4–20 min)</option>
+        <option value="short">Curtos (&lt; 4 min) — Shorts</option>
+      </select>
+    </label>
+    <span class="sep"></span>
+    <label class="opt">1º vídeo há no máx.
+      <select id="cDays">
+        <option value="30">30 dias</option><option value="60">60 dias</option>
+        <option value="90">90 dias</option><option value="180">180 dias</option>
+      </select>
+    </label>
+    <label class="opt">Média de views mín. <input id="cAvg" type="number" min="0" step="500" class="num-in"></label>
+  </div>
+  <div class="plan" id="plan" hidden></div>
 </section>
 
 <div class="status" id="status" hidden><span class="spinner"></span><span id="statusText"></span></div>
 <div class="banner" id="banner" hidden></div>
+<div class="funnel" id="funnel" hidden></div>
 
 <section class="similar-panel" id="similarPanel" hidden>
   <div class="similar-head">
     <h2 id="similarTitle"></h2>
     <button class="btn" id="closeSimilar">Fechar</button>
   </div>
+  <div class="plan-list" id="similarQueries"></div>
   <div class="grid" id="similarGrid"></div>
+</section>
+
+<!-- filtros dos resultados salvos (não gastam cota) -->
+<section class="toolbar">
+  <input id="q" type="search" class="filter" placeholder="Filtrar resultados pelo nome do vídeo ou canal" autocomplete="off">
+  <div class="chips" id="genreChips"></div>
+  <div class="toolbar-right">
+    <select id="langSel"></select>
+    <select id="sortSel">
+      <option value="score">Maior nota</option>
+      <option value="avg_views">Maior média de views</option>
+      <option value="views_per_day">Mais views/dia</option>
+      <option value="views_per_sub">Mais views/inscrito</option>
+      <option value="age_days_asc">Mais novos</option>
+      <option value="subscribers_asc">Menos inscritos</option>
+    </select>
+  </div>
 </section>
 
 <main class="grid" id="grid"></main>
@@ -66,10 +102,10 @@
     <div class="field">Idiomas da varredura
       <div class="chips" id="scanLangs"></div>
     </div>
-    <div class="field">Modo da varredura
+    <div class="field">Modo da busca
       <select id="scanMode">
-        <option value="channel">Padrão — busca canais criados no período</option>
-        <option value="both">Completo — canais + vídeos em alta (gasta o dobro)</option>
+        <option value="video">Vídeos em alta no período (recomendado)</option>
+        <option value="both">Vídeos + canais criados no período (gasta o dobro)</option>
       </select>
       <small class="muted" id="costHint"></small>
     </div>
@@ -87,7 +123,7 @@
       <img class="avatar" alt="" loading="lazy">
       <div class="head-text">
         <a class="name" target="_blank" rel="noopener"></a>
-        <div class="big"><b class="views"></b> <span class="muted">views</span></div>
+        <div class="big"><b class="avg"></b> <span class="muted">views de média por vídeo</span></div>
       </div>
       <span class="score" title="Nota de oportunidade (0–100)"></span>
     </div>
@@ -97,7 +133,7 @@
     <div class="top-head"><b>Top vídeos</b><span class="muted">Views</span></div>
     <ul class="top"></ul>
     <div class="tags"></div>
-    <button class="btn similar-btn">🌐 Similares em outros idiomas</button>
+    <button class="btn similar-btn" title="Traduz os títulos dos vídeos mais vistos e busca canais parecidos em outros idiomas">🌐 Canais parecidos em outros idiomas</button>
   </article>
 </template>
 

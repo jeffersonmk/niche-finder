@@ -1,69 +1,142 @@
 {
-  "max_channel_age_days": 30,
-  "min_subscribers": 1000,
-  "max_subscribers": 100000,
-  "min_total_views": 100000,
-  "min_views_per_sub": 10,
+  "criteria": {
+    "days": 30,
+    "max_created_days": 0,
+    "min_subscribers": 0,
+    "max_subscribers": 0,
+    "min_avg_views": 3000,
+    "min_views_per_sub": 10,
+    "max_videos": 200
+  },
+  "default_mode": "video",
   "min_genre_match": 0.5,
   "min_keyword_match": 0.3,
   "results_per_search": 50,
-  "similar_max_concepts": 2,
+  "similar_queries": 2,
   "scan_languages": [
-    "pt",
-    "en"
+    "en",
+    "pt"
   ],
   "languages": {
-    "pt": {
-      "label": "Português",
-      "regionCode": "BR",
-      "relevanceLanguage": "pt"
-    },
     "en": {
       "label": "Inglês",
       "regionCode": "US",
       "relevanceLanguage": "en"
     },
+    "pt": {
+      "label": "Português",
+      "regionCode": "BR",
+      "relevanceLanguage": "pt"
+    },
     "es": {
       "label": "Espanhol",
       "regionCode": "MX",
       "relevanceLanguage": "es"
+    },
+    "ja": {
+      "label": "Japonês",
+      "regionCode": "JP",
+      "relevanceLanguage": "ja"
+    },
+    "fr": {
+      "label": "Francês",
+      "regionCode": "FR",
+      "relevanceLanguage": "fr"
+    },
+    "de": {
+      "label": "Alemão",
+      "regionCode": "DE",
+      "relevanceLanguage": "de"
     }
   },
+  "protected_terms": [
+    "drum and bass",
+    "drum & bass",
+    "dnb",
+    "d&b",
+    "liquid dnb",
+    "liquid",
+    "jungle",
+    "breakcore",
+    "breakbeat",
+    "intelligent dnb",
+    "neurofunk",
+    "phonk",
+    "lofi",
+    "lo-fi",
+    "chillhop",
+    "synthwave",
+    "vaporwave",
+    "dreamcore",
+    "y2k",
+    "ambient",
+    "edm",
+    "house",
+    "techno",
+    "trance",
+    "dubstep",
+    "hip hop",
+    "trap",
+    "jazz",
+    "mix",
+    "playlist",
+    "remix",
+    "beats",
+    "ps1",
+    "ps2",
+    "psp",
+    "adhd"
+  ],
   "categories": {
     "musica": {
       "label": "Música",
-      "search_category_id": "10",
       "youtube_category_ids": [
         "10"
       ],
+      "category_is_enough": true,
+      "topics": [
+        "music"
+      ],
+      "video_duration": "long",
       "concepts": {
-        "relaxante": {
-          "pt": "música relaxante",
-          "en": "relaxing music",
-          "es": "música relajante"
-        },
-        "dormir": {
-          "pt": "música para dormir",
-          "en": "sleep music",
-          "es": "música para dormir"
-        },
-        "lofi": {
-          "pt": "lofi para estudar",
-          "en": "lofi hip hop study",
-          "es": "lofi para estudiar"
-        },
-        "gospel": {
-          "pt": "louvor gospel",
-          "en": "worship songs",
-          "es": "alabanzas cristianas"
-        },
-        "phonk": {
-          "pt": "phonk brasileiro",
-          "en": "phonk music",
-          "es": "phonk música"
+        "atmospheric_jungle": "atmospheric jungle dnb mix",
+        "liquid_dnb": "liquid dnb mix",
+        "dnb_focus": "dnb mix to focus",
+        "breakcore": "atmospheric breakcore mix",
+        "y2k": "y2k nostalgia dnb mix",
+        "late_night": {
+          "en": "late night liquid drum and bass",
+          "pt": "drum and bass para madrugada",
+          "es": "drum and bass para la noche"
         }
       },
-      "keywords": []
+      "keywords": [
+        "mix",
+        "playlist",
+        "music",
+        "musica",
+        "dnb",
+        "drum and bass",
+        "drum & bass",
+        "jungle",
+        "breakcore",
+        "breakbeat",
+        "liquid",
+        "lofi",
+        "lo-fi",
+        "phonk",
+        "ambient",
+        "synthwave",
+        "beats",
+        "remix",
+        "album",
+        "song",
+        "cancion",
+        "cancao",
+        "instrumental",
+        "ost",
+        "soundtrack"
+      ]
     },
     "documentario": {
       "label": "Documentário",
