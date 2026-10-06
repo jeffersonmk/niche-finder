@@ -16,13 +16,73 @@
   </div>
   <div class="actions">
     <button class="btn" id="scanBtn" title="Busca os conceitos de todos os gêneros do config.json">↻ Varredura</button>
+    <button class="btn" id="refreshBtn" title="Rechecagem dos canais salvos (~3 unidades por canal): mede o crescimento real de views/dia">⟳ Atualizar salvos</button>
     <button class="icon-btn" id="themeBtn" title="Alternar tema claro/escuro" aria-label="Alternar tema"></button>
     <button class="icon-btn" id="settingsBtn" title="Configurações" aria-label="Configurações">⚙</button>
   </div>
 </header>
 
+<!-- abas: Radar viral (novo) | Busca por palavras-chave (original) -->
+<nav class="tabs" role="tablist">
+  <button class="tab on" data-tab="radar" role="tab">🔥 Radar viral <span class="muted small">canais novos explodindo</span></button>
+  <button class="tab" data-tab="link" role="tab">🔗 Parecidos com um canal</button>
+  <button class="tab" data-tab="kw" role="tab">🔎 Busca por palavras-chave</button>
+</nav>
+
+<section class="panel link-panel" id="linkPanel" hidden>
+  <form id="linkForm" class="kw-row">
+    <input id="linkUrl" type="search" autocomplete="off"
+           placeholder="Cole o link de um canal (youtube.com/@nome) ou de um vídeo dele">
+    <button class="btn primary" type="submit">Analisar canal</button>
+  </form>
+  <p class="muted small hint">Analisar custa ~3 unidades. O app lê os vídeos do canal, descobre o gênero e o estilo e sugere as buscas.
+    Você confere (e edita) antes de gastar cota com a busca.</p>
+  <div id="linkRef" hidden></div>
+</section>
+
+<section class="panel radar-panel" id="radarPanel">
+  <form id="radarForm" class="kw-row">
+    <input id="rKw" type="search" autocomplete="off"
+           placeholder="Opcional: palavras-chave (vírgula separa). Vazio = usa os conceitos dos gêneros marcados abaixo">
+    <button class="btn primary hot" type="submit">🔥 Rodar radar</button>
+  </form>
+  <div class="opts">
+    <span class="opt">Gêneros</span><div class="chips" id="rGenres"></div>
+  </div>
+  <div class="opts">
+    <span class="opt">Idiomas</span><div class="chips" id="rLangs"></div>
+  </div>
+  <div class="opts">
+    <label class="opt">1º vídeo há no máx.
+      <select id="rDays">
+        <option value="14">14 dias</option><option value="30">30 dias</option>
+        <option value="60">60 dias</option><option value="90">90 dias</option>
+      </select>
+    </label>
+    <label class="opt">Inscritos até <input id="rMaxSubs" type="number" min="0" step="1000" class="num-in" title="0 = sem limite"></label>
+    <label class="opt">Vídeos até <input id="rMaxVid" type="number" min="1" step="5" class="num-in sm"></label>
+    <label class="opt">Média de views mín. <input id="rAvg" type="number" min="0" step="500" class="num-in"></label>
+    <label class="opt">Pontuação viral mín. <input id="rMinViral" type="number" min="0" max="100" step="5" class="num-in sm"></label>
+  </div>
+  <div class="opts">
+    <label class="opt">Duração
+      <select id="rDuration">
+        <option value="">Padrão do gênero</option>
+        <option value="long">Longos (&gt; 20 min)</option>
+        <option value="medium">Médios (4–20 min)</option>
+        <option value="short">Curtos (&lt; 4 min)</option>
+      </select>
+    </label>
+    <label class="opt" title="Repete cada busca só com vídeos dos últimos 7 dias — acha quem está subindo AGORA (custa o dobro)">
+      <input type="checkbox" id="rWeek"> + vídeos da última semana (2× custo)</label>
+    <label class="opt" title="Com palavras-chave: aprova canais mesmo fora de Música/Documentário/Curiosidades/Ensino">
+      <input type="checkbox" id="rAny"> aceitar qualquer gênero</label>
+  </div>
+  <div class="plan" id="rPlan" hidden></div>
+</section>
+
 <!-- busca por palavras-chave no YouTube -->
-<section class="panel" id="kwPanel">
+<section class="panel" id="kwPanel" hidden>
   <form id="kwForm" class="kw-row">
     <input id="kw" type="search" autocomplete="off"
            placeholder="Palavras-chave ou nome de um vídeo — separe várias com vírgula (ex.: atmospheric jungle mix, liquid dnb)">
@@ -70,18 +130,30 @@
 </section>
 
 <!-- filtros dos resultados salvos (não gastam cota) -->
+<section class="summary" id="summary" hidden></section>
 <section class="toolbar">
   <input id="q" type="search" class="filter" placeholder="Filtrar resultados pelo nome do vídeo ou canal" autocomplete="off">
   <div class="chips" id="genreChips"></div>
   <div class="toolbar-right">
+    <select id="ageSel" title="Idade do canal (1º vídeo)">
+      <option value="">Qualquer idade</option><option value="7">≤ 7 dias</option><option value="14">≤ 14 dias</option>
+      <option value="30">≤ 30 dias</option><option value="60">≤ 60 dias</option>
+    </select>
+    <select id="subsSel" title="Tamanho do canal">
+      <option value="">Qualquer tamanho</option><option value="1000">≤ 1 mil inscritos</option>
+      <option value="10000">≤ 10 mil inscritos</option><option value="100000">≤ 100 mil inscritos</option>
+    </select>
     <select id="langSel"></select>
     <select id="sortSel">
-      <option value="score">Maior nota</option>
+      <option value="viral">🔥 Mais viral</option>
+      <option value="current_vpd">Mais views/dia agora</option>
+      <option value="outlier_x">Mais fora da curva</option>
       <option value="avg_views">Maior média de views</option>
-      <option value="views_per_day">Mais views/dia</option>
       <option value="views_per_sub">Mais views/inscrito</option>
       <option value="age_days_asc">Mais novos</option>
       <option value="subscribers_asc">Menos inscritos</option>
+      <option value="videos_asc">Menos vídeos</option>
+      <option value="score">Nota antiga (oportunidade)</option>
     </select>
   </div>
 </section>
@@ -119,21 +191,38 @@
 
 <template id="cardTpl">
   <article class="card">
+    <span class="rank"></span>
     <div class="card-head">
       <img class="avatar" alt="" loading="lazy">
       <div class="head-text">
         <a class="name" target="_blank" rel="noopener"></a>
-        <div class="big"><b class="avg"></b> <span class="muted">views de média por vídeo</span></div>
+        <div class="sub muted"></div>
       </div>
-      <span class="score" title="Nota de oportunidade (0–100)"></span>
+      <div class="viral" title="Pontuação viral (0–100)">
+        <svg viewBox="0 0 36 36"><circle class="ring-bg" cx="18" cy="18" r="15.5"/><circle class="ring" cx="18" cy="18" r="15.5"/></svg>
+        <b class="vnum"></b>
+      </div>
+    </div>
+    <div class="vbadge-row"><span class="vbadge"></span><span class="hype muted small"></span></div>
+    <div class="headline">
+      <div><b class="avg"></b><span>views/vídeo</span></div>
+      <div><b class="vpd"></b><span class="vpd-l">views/dia</span></div>
+      <div><b class="ox"></b><span title="Views do melhor vídeo ÷ inscritos — quanto o canal performa acima do próprio tamanho">vs. tamanho</span></div>
     </div>
     <div class="metrics"></div>
-    <div class="spark-label muted"><span>Views por vídeo (do 1º ao último)</span><span class="age"></span></div>
+    <details class="why">
+      <summary>Por que esta pontuação?</summary>
+      <div class="factors"></div>
+    </details>
+    <div class="spark-label muted"><span>Views por vídeo</span><span class="age"></span></div>
     <div class="spark"></div>
     <div class="top-head"><b>Top vídeos</b><span class="muted">Views</span></div>
     <ul class="top"></ul>
     <div class="tags"></div>
-    <button class="btn similar-btn" title="Traduz os títulos dos vídeos mais vistos e busca canais parecidos em outros idiomas">🌐 Canais parecidos em outros idiomas</button>
+    <div class="card-actions">
+      <button class="btn similar-btn" title="Traduz os títulos dos vídeos mais vistos e busca canais parecidos em outros idiomas">🌐 Parecidos em outros idiomas</button>
+      <button class="btn refresh-one" title="Rechecar este canal (~3 unidades)">⟳</button>
+    </div>
   </article>
 </template>
 

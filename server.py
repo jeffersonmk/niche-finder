@@ -68,6 +68,11 @@ def _similar_langs(cfg: dict, ch: dict, chosen) -> list[str]:
     return picked or other
 
 
+def _radar_plan(cfg: dict, b: dict, langs: list[str], crit: dict) -> list[dict]:
+    genres = [g for g in (b.get("genres") or []) if g in cfg["categories"]] or list(cfg["categories"])
+    return core.radar_plan(cfg, langs, genres, _keywords(b.get("keywords")), crit["days"], bool(b.get("week")))
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass
@@ -109,12 +114,15 @@ class Handler(BaseHTTPRequestHandler):
         if u.path == "/api/state":
             db = core.load_db()
             return self._json({
-                "channels": list(db["channels"].values()),
+                "channels": core.channels_for_ui(cfg),
                 "last_scan": db["last_scan"],
                 "has_key": bool(core.load_api_key()),
                 "quota": core.quota_status(),
                 "config": {
                     "criteria": cfg["criteria"], "scan_languages": cfg["scan_languages"],
+                    "radar": core.criteria(cfg, None, "radar"),
+                    "viral_factors": {k: v[1] for k, v in core.VIRAL_FACTORS.items()},
+                    "viral_weights": {**{k: v[0] for k, v in core.VIRAL_FACTORS.items()}, **cfg.get("viral_weights", {})},
                     "default_mode": cfg.get("default_mode", "video"),
                     "languages": {k: v["label"] for k, v in cfg["languages"].items()},
                     "genres": {k: v["label"] for k, v in cfg["categories"].items()},
@@ -167,6 +175,12 @@ class Handler(BaseHTTPRequestHandler):
 
             if u.path == "/api/plan":
                 # pré-visualiza as buscas (e traduções) sem gastar cota do YouTube
+                if b.get("radar"):
+                    rcrit = core.criteria(cfg, b.get("criteria"), "radar")
+                    plan = {"queries": _radar_plan(cfg, b, langs, rcrit)}
+                    plan["cost"] = len(plan["queries"]) * 100
+                    plan["remaining"] = core.quota_status()["remaining"]
+                    return self._json(plan)
                 if b.get("channel"):
                     ch = core.load_db()["channels"].get(b["channel"])
                     if not ch:
@@ -194,6 +208,59 @@ class Handler(BaseHTTPRequestHandler):
                     core.save_results(res)
                     return res, funnel
                 return self._json({"job": start_job("scan", fn)})
+
+            if u.path == "/api/radar":
+                rcrit = core.criteria(cfg, b.get("criteria"), "radar")
+                plan = _radar_plan(cfg, b, langs, rcrit)
+                if not plan:
+                    return self._json({"error": "Nenhuma busca para fazer: escolha gêneros ou digite palavras-chave."}, 400)
+                client = yt()
+
+                def fn(progress):
+                    res, funnel = core.radar(client, cfg, plan, rcrit, genres, b.get("duration") or None,
+                                             bool(b.get("any_genre")), progress)
+                    core.save_results(res, cfg)
+                    return res, funnel, {"queries": plan}
+                return self._json({"job": start_job("radar", fn)})
+
+            if u.path == "/api/refresh":
+                db = core.load_db()["channels"]
+                ids = [i for i in (b.get("ids") or list(db)) if i in db][:200]
+                if not ids:
+                    return self._json({"error": "Nenhum canal salvo para atualizar."}, 400)
+                client = core.YouTube(core.load_api_key(), cache_hours=0, fetch=FETCH)   # sem cache: dados frescos
+
+                def fn(progress):
+                    res, funnel = core.refresh_channels(client, cfg, ids, progress)
+                    core.save_results(res, cfg)
+                    return res, funnel
+                return self._json({"job": start_job("refresh", fn)})
+
+            if u.path == "/api/channel_lookup":
+                # analisa o canal do link (~3 unidades) e sugere as buscas — nada de 100 unidades aqui
+                client = yt()
+                cid = core.resolve_channel(client, b.get("url", ""))
+                ref = core.profile_channel(client, cfg, cid)
+                plan = core.link_plan(cfg, ref, langs)
+                return self._json({"channel": ref, "queries": plan["base"], "duration": plan["duration"],
+                                   "used": client.used, "quota": core.quota_status()})
+
+            if u.path == "/api/similar_link":
+                queries = _keywords(b.get("queries"))
+                if not queries:
+                    return self._json({"error": "Digite ao menos uma busca."}, 400)
+                client = yt()
+                ref = core.profile_channel(client, cfg, b.get("channel", ""))   # vem do cache: 0 unidades
+                rcrit = core.criteria(cfg, b.get("criteria"), "radar")
+                same = bool(b.get("same_genre", True))
+                duration = b.get("duration") or None
+
+                def fn(progress):
+                    res, funnel, extra = core.similar_from_link(client, cfg, ref, queries, langs, rcrit, same,
+                                                                duration, progress)
+                    core.save_results(res, cfg)
+                    return res, funnel, extra
+                return self._json({"job": start_job("similar_link", fn)})
 
             if u.path == "/api/search":
                 kws = _keywords(b.get("keywords"))
@@ -227,6 +294,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"job": start_job("similar", fn)})
         except core.ApiError as e:
             return self._json({"error": str(e)}, 400)
+        except Exception as e:  # noqa: BLE001 — nunca derruba o servidor nem mostra a chave
+            print(core.redact(traceback.format_exc()), file=sys.stderr)
+            return self._json({"error": core.redact(f"Erro inesperado: {e}")}, 500)
         self._json({"error": "rota desconhecida"}, 404)
 
 
@@ -258,8 +328,40 @@ if __name__ == "__main__":
     ap.add_argument("--keywords", help="busca por palavras-chave separadas por vírgula, pelo terminal")
     ap.add_argument("--langs", help="idiomas separados por vírgula (padrão: scan_languages do config)")
     ap.add_argument("--days", type=int, help="idade máxima do 1º vídeo, em dias")
+    ap.add_argument("--radar", action="store_true", help="Radar viral: canais novos explodindo (usa --keywords se houver)")
+    ap.add_argument("--like", metavar="LINK", help="canais novos e virais parecidos com o canal deste link")
     a = ap.parse_args()
-    if a.scan or a.keywords:
+    if a.like:
+        cfg = core.load_config()
+        crit = core.criteria(cfg, {"days": a.days}, "radar")
+        langs = a.langs.split(",") if a.langs else cfg["scan_languages"]
+        client = yt()
+        ref = core.profile_channel(client, cfg, core.resolve_channel(client, a.like))
+        base = _keywords(a.keywords) or core.link_plan(cfg, ref, langs)["base"]
+        print(f"Referência: {ref['title']} [{ref['lang']}] · {', '.join(ref['genres'])} · buscas: {base}")
+        res, funnel, _ = core.similar_from_link(client, cfg, ref, base, langs, crit, True,
+                                                core.link_plan(cfg, ref, langs)["duration"], print)
+        core.save_results(res, cfg)
+        print("\nFunil: " + " · ".join(f"{k}: {v}" for k, v in funnel.items()))
+        for r in res:
+            print(f"  🔥{r['viral']:5}  {r['title']}  [{r['lang']}]  {r['subscribers']:,} insc. · {r['videos']} vídeos "
+                  f"· média {r['avg_views']:,} · {round(r['age_days'])} dias  {r['url']}")
+        print(f"Cota usada: {client.used}")
+    elif a.radar:
+        cfg = core.load_config()
+        crit = core.criteria(cfg, {"days": a.days}, "radar")
+        langs = a.langs.split(",") if a.langs else cfg["scan_languages"]
+        plan = core.radar_plan(cfg, langs, list(cfg["categories"]), _keywords(a.keywords), crit["days"])
+        print(f"Radar: {len(plan)} buscas, ~{len(plan) * 100} unidades")
+        client = yt()
+        res, funnel = core.radar(client, cfg, plan, crit, None, None, bool(a.keywords), print)
+        core.save_results(res, cfg)
+        print("\nFunil: " + " · ".join(f"{k}: {v}" for k, v in funnel.items()))
+        for r in res:
+            print(f"  🔥{r['viral']:5}  {r['title']}  [{r['lang']}]  {r['subscribers']:,} insc. · {r['videos']} vídeos "
+                  f"· média {r['avg_views']:,} · ~{r['current_vpd']:,} views/dia · {round(r['age_days'])} dias  {r['url']}")
+        print(f"Cota usada: {client.used}")
+    elif a.scan or a.keywords:
         cfg = core.load_config()
         crit = core.criteria(cfg, {"days": a.days})
         langs = a.langs.split(",") if a.langs else cfg["scan_languages"]

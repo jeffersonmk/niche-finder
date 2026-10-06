@@ -1,10 +1,10 @@
 # 🎯 Niche Finder
 
-**Encontre canais do YouTube recém-criados, pequenos e que já estão performando muito bem** nos nichos de **Música**, **Documentário**, **Curiosidades** e **Ensino**, em português, inglês e espanhol.
+**Encontre canais do YouTube recém-criados, pequenos e que já estão viralizando** — ranqueados do mais viral ao menos viral — nos nichos de **Música**, **Documentário**, **Curiosidades** e **Ensino**, em português, inglês e espanhol.
 
 É uma ferramenta local: roda no seu computador, usa a sua própria chave gratuita da YouTube Data API v3 e mostra tudo num dashboard web com modo claro e escuro.
 
-![Dashboard no modo claro](docs/light.png)
+![Radar viral no modo escuro](docs/radar-dark.png)
 
 ---
 
@@ -43,22 +43,25 @@ Um canal **criado há poucas semanas** que já tem milhares de inscritos e cente
 
 | | |
 |---|---|
+| 🔥 **Radar viral** | Aba principal. Procura vídeos que estão bombando no período e aprova só canais **novos** (1º vídeo há ≤ 30 dias), **pequenos** (≤ 100 mil inscritos), com **poucos vídeos** (≤ 40) e views muito acima do esperado. Resultado em cards ranqueados do mais viral ao menos viral. |
+| 🚀 **Pontuação viral (0–100)** | 7 fatores: views totais, views por vídeo, views por inscrito, poucos vídeos, idade do canal, recência das views e desempenho fora da curva para o tamanho. Cada card mostra a barra de cada fator em "Por que esta pontuação?". |
+| ⟳ **Crescimento medido** | "Atualizar salvos" recheca os canais por ~3 unidades cada (sem buscas de 100). A partir da 2ª checagem o card mostra as **views/dia reais** entre as checagens, em vez da estimativa. |
 | 🆕 **Só canais novos de verdade** | O **primeiro vídeo** do canal precisa ter sido publicado dentro do período (padrão: 30 dias). Canais antigos que voltaram a postar e canais com vídeos importados ficam de fora. |
 | 📈 **Performance alta** | Filtra pela **média de views por vídeo** (padrão: 3.000) e views por inscrito. O número de inscritos **não** é filtrado: um canal com 200 inscritos e 30 mil views por vídeo aparece. |
 | 🎼 **Gênero detectado pelo conteúdo** | Usa a categoria de cada vídeo, os tópicos que o YouTube atribui ao canal e palavras-chave nos títulos. Pega canais de música publicados como "Pessoas e blogs" e não deixa um vlog passar como "documentário". |
 | 🔑 **Busca por palavras-chave** | Digite palavras-chave ou o nome de um vídeo. O app traduz para os idiomas marcados (mantendo termos como *dnb*, *jungle*, *lofi*, *mix*), mostra as buscas e o custo, e só então busca no YouTube. Dá para filtrar por gênero e duração (ex.: mixes longos). |
 | 🌐 **Parecidos em outros idiomas** | Com um clique, extrai o estilo dos títulos dos vídeos mais vistos do canal (ex.: `VIRTUAL MEMORY 2003 (atmospheric jungle dnb mix)` → *atmospheric jungle dnb mix*), traduz e busca canais parecidos nos outros idiomas. |
 | 🧮 **Funil de filtros** | Toda busca mostra quantos canais caíram em cada filtro, para saber o que afrouxar quando vier pouco resultado. |
-| 🏆 **Nota de oportunidade (0–100)** | Combina velocidade de views, eficiência por inscrito e tamanho do canal. |
+| 🏆 **Nota de oportunidade (0–100)** | A nota original continua calculada e disponível na ordenação "Nota antiga". |
 | 🌗 **Modo claro e escuro** | O tema escolhido fica salvo no navegador. |
 | 💸 **Controle de cota** | Mostra o custo estimado antes de cada busca, guarda respostas em cache por 12 h e conta o uso diário. |
 | 📦 **Zero dependências** | Apenas a biblioteca padrão do Python 3.10+. Nada de `pip install`. |
 
 ## Screenshots
 
-| Modo escuro | Similares em outros idiomas | Configurações |
-|---|---|---|
-| ![Modo escuro](docs/dark.png) | ![Similares](docs/similar.png) | ![Configurações](docs/settings.png) |
+| Radar viral (claro) | Busca por palavras-chave | Similares em outros idiomas | Configurações |
+|---|---|---|---|
+| ![Radar no modo claro](docs/radar-light.png) | ![Modo escuro](docs/dark.png) | ![Similares](docs/similar.png) | ![Configurações](docs/settings.png) |
 
 > As imagens usam **dados de demonstração** (canais fictícios gerados pelos testes), não canais reais.
 
@@ -109,6 +112,9 @@ Opções:
 python3 server.py --port 9000       # usa outra porta
 python3 server.py --no-browser      # não abre o navegador automaticamente
 python3 server.py --scan            # faz uma varredura completa pelo terminal, sem interface
+python3 server.py --radar --langs en,pt                     # Radar viral pelo terminal (ranking do mais viral)
+python3 server.py --radar --keywords "liquid dnb mix" --days 60   # Radar com palavras-chave
+python3 server.py --like "https://www.youtube.com/@canal" --langs en,pt   # canais novos e virais parecidos com um canal
 python3 server.py --keywords "atmospheric jungle mix, liquid dnb" --langs en,pt   # busca por palavras-chave pelo terminal
 python3 server.py --scan --days 60  # muda a idade máxima do 1º vídeo
 ```
@@ -208,6 +214,26 @@ eficiência = log10(views por inscrito + 1) / 3         → 1.000 views/inscrito
 
 Cada termo é limitado entre 0 e 1. A escala logarítmica evita que um único viral domine o ranking.
 
+### Radar viral e pontuação viral
+
+O Radar usa os conceitos dos gêneros marcados (ou as palavras-chave digitadas, traduzidas para os idiomas marcados) e busca **vídeos publicados no período, ordenados por views**. Os canais desses vídeos passam pelos filtros do bloco `radar` do `config.json` (idade do 1º vídeo, inscritos, nº de vídeos, média de views, views/inscrito, gênero) e, por fim, pela **pontuação viral mínima**. A opção *+ vídeos da última semana* repete cada busca só com vídeos dos últimos 7 dias, para pegar quem está subindo agora (custa o dobro).
+
+Cada fator vai de 0 a 1 (escala logarítmica, para um único viral não dominar o ranking):
+
+| Fator | Peso | Como é medido | Máximo em |
+|---|---|---|---|
+| Views totais | 10% | views do canal | 10 mi |
+| Views por vídeo | 20% | views ÷ nº de vídeos | 1 mi |
+| Views por inscrito | 15% | views ÷ inscritos | 1.000 |
+| Poucos vídeos | 10% | 1 vídeo = 1 · 10 = 0,5 · 100 = 0 | — |
+| Canal novo | 10% | e^(−idade/45): 7 d = 0,86 · 30 d = 0,51 · 90 d = 0,14 | — |
+| Recência das views | 20% | 75%: views/dia atuais (medidas entre checagens, ou soma de views÷idade dos vídeos da última semana) · 25%: aceleração (vídeos novos ÷ mediana do canal) | 200 mil/dia |
+| Fora da curva | 15% | metade: views/dia ÷ inscritos · metade: melhor vídeo ÷ inscritos | 100× / 1.000× |
+
+`pontuação = 100 × Σ(peso × fator) ÷ Σ(pesos)`. Rótulos: **🚀 Explosivo** ≥ 75 · **🔥 Viralizando** ≥ 60 · **📈 Promissor** ≥ 45 · **👀 Em observação**. Os pesos ficam em `config.json → viral_weights`. A pontuação é recalculada sempre que a página abre (a idade e a recência mudam a cada dia), sem gastar cota.
+
+Para canais com inscritos ocultos, os fatores que dependem de inscritos valem 0,5 (neutro).
+
 ### Parecidos em outros idiomas
 
 1. Pega os títulos dos 3 vídeos mais vistos do canal e separa **tema** e **estilo**: `VIRTUAL MEMORY 2003 (atmospheric jungle dnb mix)` → tema *virtual memory*, estilo *atmospheric jungle dnb mix*. Remove emojis, hashtags, anos e trechos em japonês/chinês/coreano, que costumam ser decorativos.
@@ -226,6 +252,12 @@ A tradução usa o serviço público do Google Tradutor (com o MyMemory como res
 | `criteria.min_subscribers` / `max_subscribers` | `0` / `0` | Faixa de inscritos (0 = sem limite). Desligada por padrão. |
 | `criteria.min_avg_views` | `3000` | Média mínima de views por vídeo. |
 | `criteria.min_views_per_sub` | `10` | Mínimo de views por inscrito. |
+| `radar.days` | `30` | Radar: idade máxima do 1º vídeo (14/30/60/90 na tela). |
+| `radar.max_subscribers` | `100000` | Radar: máximo de inscritos (0 = sem limite). |
+| `radar.max_videos` | `40` | Radar: máximo de vídeos publicados. |
+| `radar.min_avg_views` / `min_views_per_sub` | `2000` / `5` | Radar: média mínima de views por vídeo e views por inscrito. |
+| `radar.min_viral` | `35` | Radar: pontuação viral mínima para aparecer. |
+| `viral_weights` | ver tabela acima | Peso de cada fator da pontuação viral. |
 | `criteria.max_videos` | `200` | Máximo de vídeos (acima disso não dá para confirmar o 1º vídeo sem gastar muita cota). |
 | `default_mode` | `"video"` | `video` = vídeos em alta no período; `both` = também canais criados no período (custa o dobro). |
 | `min_genre_match` | `0.5` | Fração mínima de vídeos em categorias do YouTube compatíveis com o gênero. |
@@ -328,9 +360,12 @@ O servidor escuta só em `127.0.0.1`. Todas as respostas são JSON.
 | `POST` | `/api/plan` | `{"keywords": "a, b", "langs": ["pt","en"]}` ou `{"channel": "<id>"}`: mostra as buscas traduzidas e o custo, sem gastar cota do YouTube. |
 | `POST` | `/api/search` | `{"keywords": "a, b", "langs": [...], "translate": true, "genres": [...], "duration": "long", "criteria": {...}}` inicia uma busca por palavras-chave. |
 | `POST` | `/api/similar` | `{"channel": "<id>", "langs": [...]}` busca canais parecidos. |
+| `POST` | `/api/plan` | `{"radar": true, "keywords": "", "langs": [...], "genres": [...], "week": false, "criteria": {...}}`: plano do Radar e custo, sem gastar cota. |
+| `POST` | `/api/radar` | Mesmo corpo + `"any_genre"` e `"duration"`: roda o Radar viral. |
+| `POST` | `/api/refresh` | `{"ids": [...]}` (vazio = todos): rechecagem dos canais salvos (~3 unidades por canal). |
 | `POST` | `/api/scan` | `{"langs": ["pt","en"], "mode": "video"}` inicia uma varredura. |
 
-As rotas `POST` de busca retornam `{"job": "<id>"}`. A interface consulta `/api/job` até a tarefa terminar. `criteria` aceita `days`, `min_subscribers` e `min_avg_views`.
+As rotas `POST` de busca retornam `{"job": "<id>"}`. A interface consulta `/api/job` até a tarefa terminar. `criteria` aceita qualquer chave de `criteria`/`radar` (ex.: `days`, `max_subscribers`, `max_videos`, `min_avg_views`, `min_viral`).
 
 ## Testes e modo demonstração
 
@@ -348,7 +383,9 @@ Os testes verificam que:
 - o gênero é detectado pelo conteúdo, inclusive música publicada como "Pessoas e blogs";
 - títulos viram buscas (tema + estilo) e a tradução preserva termos como *dnb* e *jungle*;
 - a busca por palavras-chave, os parecidos em outro idioma, a nota e o contador de cota funcionam;
-- a chave nunca vaza (classe `SecurityTest`).
+- a pontuação viral sobe com cada fator, fica entre 0 e 100, respeita os pesos, e o Radar ordena do mais viral ao menos viral (classe `ViralRadarTest`);
+- a rechecagem grava histórico e mede o crescimento real; registros antigos ganham pontuação na hora;
+- a chave nunca vaza — nem pelo Radar, nem no front-end (`web/` não contém chave nem chamadas diretas a `googleapis.com`) (classe `SecurityTest`).
 
 O tradutor também é simulado nos testes, então eles rodam sem internet.
 
