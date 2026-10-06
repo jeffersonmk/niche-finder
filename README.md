@@ -45,6 +45,7 @@ Um canal **criado há poucas semanas** que já tem milhares de inscritos e cente
 |---|---|
 | 🔥 **Radar viral** | Aba principal. Procura vídeos que estão bombando no período e aprova só canais **novos** (1º vídeo há ≤ 30 dias), **pequenos** (≤ 100 mil inscritos), com **poucos vídeos** (≤ 40) e views muito acima do esperado. Resultado em cards ranqueados do mais viral ao menos viral. |
 | 🚀 **Pontuação viral (0–100)** | 7 fatores: views totais, views por vídeo, views por inscrito, poucos vídeos, idade do canal, recência das views e desempenho fora da curva para o tamanho. Cada card mostra a barra de cada fator em "Por que esta pontuação?". |
+| 🔗 **Parecidos com um canal** | Cole o link de qualquer canal (`@nome`, `/channel/UC…`, `/c/`, `/user/`) ou de um vídeo dele (`watch?v=`, `youtu.be/`, `/shorts/`). O app analisa o canal (~3 unidades), sugere buscas a partir dos vídeos mais vistos (editáveis) e encontra canais **novos e virais** parecidos, ranqueados pela pontuação viral. |
 | ⟳ **Crescimento medido** | "Atualizar salvos" recheca os canais por ~3 unidades cada (sem buscas de 100). A partir da 2ª checagem o card mostra as **views/dia reais** entre as checagens, em vez da estimativa. |
 | 🆕 **Só canais novos de verdade** | O **primeiro vídeo** do canal precisa ter sido publicado dentro do período (padrão: 30 dias). Canais antigos que voltaram a postar e canais com vídeos importados ficam de fora. |
 | 📈 **Performance alta** | Filtra pela **média de views por vídeo** (padrão: 3.000) e views por inscrito. O número de inscritos **não** é filtrado: um canal com 200 inscritos e 30 mil views por vídeo aparece. |
@@ -59,9 +60,9 @@ Um canal **criado há poucas semanas** que já tem milhares de inscritos e cente
 
 ## Screenshots
 
-| Radar viral (claro) | Busca por palavras-chave | Similares em outros idiomas | Configurações |
-|---|---|---|---|
-| ![Radar no modo claro](docs/radar-light.png) | ![Modo escuro](docs/dark.png) | ![Similares](docs/similar.png) | ![Configurações](docs/settings.png) |
+| Radar viral (claro) | Parecidos com um canal | Busca por palavras-chave | Similares em outros idiomas | Configurações |
+|---|---|---|---|---|
+| ![Radar no modo claro](docs/radar-light.png) | ![Parecidos com um canal](docs/link.png) | ![Modo escuro](docs/dark.png) | ![Similares](docs/similar.png) | ![Configurações](docs/settings.png) |
 
 > As imagens usam **dados de demonstração** (canais fictícios gerados pelos testes), não canais reais.
 
@@ -134,6 +135,7 @@ export YT_API_KEY="sua-chave"
 | Ação | O que faz | Custo aproximado |
 |---|---|---|
 | **Buscar canais** (palavras-chave) | Busca cada palavra-chave em cada idioma marcado (traduzida) | 100 unidades por palavra-chave × idioma |
+| **🔗 Parecidos com um canal** (link) | Analisa o canal (~3 unidades) e busca as sugestões editáveis nos idiomas marcados | 100 unidades por busca × idioma |
 | **🌐 Canais parecidos em outros idiomas** | Busca o estilo do canal, traduzido, nos idiomas marcados | 100 unidades × até 2 buscas × idioma |
 | **↻ Varredura** | Busca todos os conceitos do `config.json` nos idiomas marcados em Configurações | ~3.000 unidades (PT + EN) |
 
@@ -234,6 +236,16 @@ Cada fator vai de 0 a 1 (escala logarítmica, para um único viral não dominar 
 
 Para canais com inscritos ocultos, os fatores que dependem de inscritos valem 0,5 (neutro).
 
+### Parecidos com um canal (link)
+
+1. **Lê o link:** aceita `youtube.com/@nome`, `/channel/UC…`, `/c/nome`, `/user/nome`, só `@nome`, ou o link de um vídeo do canal (`watch?v=`, `youtu.be/`, `/shorts/`, `music.youtube.com`). Links de outros sites ou de páginas de busca são recusados com uma mensagem clara.
+2. **Analisa o canal de referência (~3 unidades):** idioma, gênero, formato (Shorts/longos), inscritos e os 3 vídeos mais vistos. O canal de referência pode ser grande e antigo; os filtros valem só para os resultados.
+3. **Sugere buscas:** usa a mesma lógica dos "parecidos em outros idiomas" (tema + estilo dos títulos mais vistos), encurtadas para no máximo 5 palavras e sem palavras repetidas (*24/7 halloween ambience spooky lofi to get chills to lofi hip hop beats* → *lofi hip hop beats*). As sugestões são editáveis antes de gastar cota.
+4. **Busca e ranqueia:** procura vídeos do período nos idiomas marcados, com a mesma duração do canal (se escolhido), aplica os critérios do **Radar viral** (idade, inscritos, nº de vídeos, média de views) e, por padrão, só aceita canais do **mesmo gênero**. O próprio canal de referência nunca aparece nos resultados.
+5. Os aprovados são salvos com a etiqueta **≈ nome do canal de referência** e ordenados do mais viral ao menos viral.
+
+Em nichos onde os canais postam muito (lofi, jazz relaxante), o filtro que mais elimina é "muitos vídeos": aumente **Vídeos até** na aba Radar (os critérios são compartilhados).
+
 ### Parecidos em outros idiomas
 
 1. Pega os títulos dos 3 vídeos mais vistos do canal e separa **tema** e **estilo**: `VIRTUAL MEMORY 2003 (atmospheric jungle dnb mix)` → tema *virtual memory*, estilo *atmospheric jungle dnb mix*. Remove emojis, hashtags, anos e trechos em japonês/chinês/coreano, que costumam ser decorativos.
@@ -315,6 +327,7 @@ Custo por operação com a configuração padrão:
 | Operação | Cálculo | Total |
 |---|---|---|
 | Busca por palavras-chave | palavras-chave × idiomas × 100 | 3 palavras em PT + EN = ~600 + detalhes |
+| Parecidos com um canal (link) | ~3 para analisar + buscas × idiomas × 100 | 1 busca em EN = ~100 + detalhes |
 | Parecidos em outros idiomas | até 2 buscas × idiomas marcados × 100 | PT + EN = ~400 + detalhes |
 | Varredura (PT + EN) | conceitos do config × 2 idiomas × 100 | ~3.000 + detalhes |
 | Varredura no modo `both` | o dobro (vídeos + canais) | ~6.000 + detalhes |
@@ -362,6 +375,8 @@ O servidor escuta só em `127.0.0.1`. Todas as respostas são JSON.
 | `POST` | `/api/similar` | `{"channel": "<id>", "langs": [...]}` busca canais parecidos. |
 | `POST` | `/api/plan` | `{"radar": true, "keywords": "", "langs": [...], "genres": [...], "week": false, "criteria": {...}}`: plano do Radar e custo, sem gastar cota. |
 | `POST` | `/api/radar` | Mesmo corpo + `"any_genre"` e `"duration"`: roda o Radar viral. |
+| `POST` | `/api/channel_lookup` | `{"url": "<link>", "langs": [...]}`: identifica o canal (~3 unidades) e devolve o resumo, as buscas sugeridas e o custo. |
+| `POST` | `/api/similar_link` | `{"channel": "<id>", "queries": [...], "langs": [...], "duration": "any", "same_genre": true, "criteria": {...}}`: busca canais novos e virais parecidos. |
 | `POST` | `/api/refresh` | `{"ids": [...]}` (vazio = todos): rechecagem dos canais salvos (~3 unidades por canal). |
 | `POST` | `/api/scan` | `{"langs": ["pt","en"], "mode": "video"}` inicia uma varredura. |
 
@@ -385,7 +400,8 @@ Os testes verificam que:
 - a busca por palavras-chave, os parecidos em outro idioma, a nota e o contador de cota funcionam;
 - a pontuação viral sobe com cada fator, fica entre 0 e 100, respeita os pesos, e o Radar ordena do mais viral ao menos viral (classe `ViralRadarTest`);
 - a rechecagem grava histórico e mede o crescimento real; registros antigos ganham pontuação na hora;
-- a chave nunca vaza — nem pelo Radar, nem no front-end (`web/` não contém chave nem chamadas diretas a `googleapis.com`) (classe `SecurityTest`).
+- a busca por link entende todos os formatos de URL, resolve `@handle` e vídeos, não devolve o próprio canal e ranqueia pela pontuação viral (classe `SimilarFromLinkTest`);
+- a chave nunca vaza — nem pelo Radar, nem pela busca por link, nem no front-end (`web/` não contém chave nem chamadas diretas a `googleapis.com`) (classe `SecurityTest`).
 
 O tradutor também é simulado nos testes, então eles rodam sem internet.
 
