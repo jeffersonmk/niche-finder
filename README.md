@@ -134,44 +134,55 @@ export YT_API_KEY="sua-chave"
 
 | Ação | O que faz | Custo aproximado |
 |---|---|---|
-| **Buscar canais** (palavras-chave) | Busca cada palavra-chave em cada idioma marcado (traduzida) | 100 unidades por palavra-chave × idioma |
+| **🔥 Radar viral** | Busca as palavras-chave digitadas nos idiomas marcados e aprova só canais novos, pequenos e com as palavras-chave nos títulos dos vídeos | 100 unidades por palavra-chave × idioma (2× com "+ última semana") |
+| **🔎 Buscar canais** (palavras-chave) | Busca cada palavra-chave em cada idioma marcado (traduzida) | 100 unidades por palavra-chave × idioma |
 | **🔗 Parecidos com um canal** (link) | Analisa o canal (~3 unidades) e busca as sugestões editáveis nos idiomas marcados | 100 unidades por busca × idioma |
 | **🌐 Canais parecidos em outros idiomas** | Busca o estilo do canal, traduzido, nos idiomas marcados | 100 unidades × até 2 buscas × idioma |
 | **↻ Varredura** | Busca todos os conceitos do `config.json` nos idiomas marcados em Configurações | ~3.000 unidades (PT + EN) |
 
-Antes de gastar cota, o app sempre mostra **as buscas que vai fazer (já traduzidas)** e o custo estimado. Na busca por palavras-chave, o primeiro clique mostra o plano e o segundo (**Confirmar busca**) executa.
+Antes de gastar cota, o app sempre mostra **as buscas que vai fazer (já traduzidas)** e o custo estimado. No Radar e na busca por palavras-chave, o primeiro clique mostra o plano e o segundo (**Confirmar radar** / **Confirmar busca**) executa.
+
+| | 🔥 Radar viral | 🔗 Parecidos com um canal | 🔎 Busca por palavras-chave |
+|---|---|---|---|
+| De onde vêm as buscas | palavras-chave digitadas | sugeridas pelos títulos do canal (editáveis) | palavras-chave ou nome de um vídeo |
+| Palavra-chave precisa estar nos títulos do canal | ✅ (% ajustável) | ❌ | ❌ |
+| Filtra por gênero | ❌ (qualquer gênero) | ✅ mesmo gênero (opcional) | ✅ só os 4 gêneros |
+| Critérios | novos e pequenos (`radar`) | os do Radar | soltos (`criteria`) |
 
 #### Dicas para música
 
-Use o estilo como aparece nos títulos dos canais que você quer encontrar, e marque **Duração: Longos** para mixes:
+Use o estilo como aparece nos títulos dos canais que você quer encontrar (no Radar, o canal só passa se os títulos dele tiverem essas palavras), e marque **Duração: Longos** para mixes:
 
 ```
 atmospheric jungle dnb mix, liquid dnb mix, atmospheric breakcore mix, ps2 nostalgia jungle mix
 ```
 
-Nos critérios da tela principal, você pode ajustar a idade máxima do 1º vídeo (30, 60, 90 ou 180 dias) e a média mínima de views. Esses valores ficam salvos no navegador.
+No Radar você ajusta idade máxima do 1º vídeo, inscritos, nº de vídeos, média de views, pontuação viral mínima e a % de títulos com a palavra-chave; na busca por palavras-chave, a idade máxima (30, 60, 90 ou 180 dias) e a média mínima de views. Esses valores ficam salvos no navegador. Em nichos que postam muito (lofi, jazz relaxante), aumente **Vídeos até**.
 
 ### 4. Explore os resultados
 
 - **Filtrar resultados:** digite parte do nome de um vídeo ou canal para filtrar na hora, sem gastar cota. O vídeo que bateu com a busca fica destacado no card.
-- **Chips de gênero:** filtram por Música, Documentário, Curiosidades ou Ensino.
-- **Idioma e ordenação:** maior nota, maior média de views, mais views por dia, views por inscrito, mais novos ou menos inscritos.
+- **Chips de gênero:** filtram por Música, Documentário, Curiosidades, Ensino (ou Outros).
+- **Idade e tamanho:** só canais com 1º vídeo há ≤ 7/14/30/60 dias e/ou com ≤ 1 mil/10 mil/100 mil inscritos.
+- **Idioma e ordenação:** 🔥 mais viral (padrão), mais views/dia agora, mais fora da curva, maior média de views, mais views/inscrito, mais novos, menos inscritos, menos vídeos ou a nota antiga.
+- **⟳ Atualizar salvos:** recheca os canais (~3 unidades cada) e passa a mostrar o crescimento real em views/dia.
 - **☾ / ☀:** alterna entre modo escuro e claro.
 
 Cada card mostra:
 
-- avatar, nome (link para o canal), **média de views por vídeo** e a **nota**;
-- inscritos, views totais, views por dia e número de vídeos;
-- gráfico com as views de cada vídeo, do primeiro ao último;
-- os 3 vídeos mais vistos (com link);
-- etiquetas de idioma, gênero, formato (**Shorts**, **Longos (~58 min)** ou **Misto**) e as buscas que encontraram o canal.
+- posição no ranking (#1, #2…), avatar, nome (link para o canal) e a **pontuação viral** com o rótulo (🚀 Explosivo, 🔥 Viralizando, 📈 Promissor, 👀 Em observação);
+- destaques: views por vídeo, views por dia e "vs. tamanho" (melhor vídeo ÷ inscritos); depois inscritos, views totais, vídeos e views por inscrito;
+- **Por que esta pontuação?**: uma barra para cada fator;
+- gráfico com as views de cada vídeo, do primeiro ao último, e os 3 vídeos mais vistos (com link);
+- etiquetas de idioma, gênero, formato (**Shorts**, **Longos (~58 min)** ou **Misto**), **🎯 "palavra-chave" em X/Y títulos** (Radar), **≈ canal de referência** (Parecidos) e as buscas que encontraram o canal.
 
-Os resultados ficam salvos em `data/channels.json` e se acumulam entre varreduras. Canais que passam da idade máxima são removidos automaticamente na varredura seguinte.
+Os resultados de todas as abas ficam salvos em `data/channels.json` e se acumulam entre buscas. Canais que passam da idade máxima são removidos automaticamente na varredura seguinte.
 
 ## Como funciona
 
 ```
- Palavras-chave por gênero e idioma (config.json)
+ Radar / busca: palavras-chave digitadas (traduzidas)
+ Varredura: conceitos por gênero e idioma (config.json)
                       │
                       ▼
  1. search  ── vídeos publicados no período, ordenados por views
@@ -187,10 +198,11 @@ Os resultados ficam salvos em `data/channels.json` e se acumulam entre varredura
                       │
                       ▼
  4. videos  ── categoria, idioma do áudio, duração, views de cada vídeo
-               ✗ não se encaixa em nenhum dos 4 gêneros
+               ✗ Radar: palavra-chave em menos que a % mínima dos títulos (qualquer gênero passa)
+               ✗ busca/varredura: não se encaixa em nenhum dos 4 gêneros
                       │
                       ▼
- 5. nota, ranking e gravação em data/channels.json → dashboard
+ 5. pontuação viral, ranking e gravação em data/channels.json → dashboard
 ```
 
 Os filtros mais baratos rodam primeiro. Assim, a maior parte da cota vai para as buscas (100 unidades cada), e não para detalhar canais que seriam descartados.
@@ -429,7 +441,7 @@ python3 tests/test_offline.py --serve     # http://127.0.0.1:8799
 
 ## Limitações conhecidas
 
-- **Monetização não é verificada.** A API oficial não informa se um canal é monetizado, e o número de inscritos não é filtrado. Se quiser só canais com chance de monetizar, defina `"min_subscribers": 1000` no `config.json`.
+- **Monetização não é verificada.** A API oficial não informa se um canal é monetizado. O Radar limita o máximo de inscritos (100 mil), mas nenhuma aba exige um mínimo. Se quiser só canais com chance de monetizar, defina `"min_subscribers": 1000` no `config.json`.
 - **Canais com o 1º vídeo há menos de 30 dias e média alta são poucos.** Uma busca pode trazer poucos canais. Use o funil para ver onde eles caíram e aumente a idade máxima (60/90 dias) se precisar.
 - **A tradução é automática.** Ela pode errar gírias; confira as buscas no plano antes de confirmar. Quando o tradutor não responde, a busca usa o texto original.
 - **A busca do YouTube não é exaustiva.** Ela devolve no máximo 50 resultados por consulta, então canais que não aparecem para as palavras-chave configuradas não serão encontrados. Mais conceitos significam mais cobertura, mas também mais cota.
@@ -446,7 +458,8 @@ python3 tests/test_offline.py --serve     # http://127.0.0.1:8799
 | *Chave da API inválida* | Confira se copiou a chave inteira. Se ela tiver restrições, confirme que a YouTube Data API v3 está liberada. |
 | *A YouTube Data API v3 não está ativada* | Ative a API na Biblioteca do projeto no Google Cloud (passo 3 da seção da chave). |
 | *Cota diária da API esgotada* | Aguarde o reinício à meia-noite do Pacífico. Buscas repetidas continuam vindo do cache. |
-| Nenhum canal encontrado | Normal para critérios rígidos. Olhe o funil: se a maioria caiu em "vídeos anteriores ao período", aumente a idade máxima; em "média de views baixa", reduza a média mínima. Palavras-chave mais específicas (iguais aos títulos dos canais que você procura) também ajudam. |
+| Nenhum canal encontrado | Normal para critérios rígidos. Olhe o funil: se a maioria caiu em "vídeos anteriores ao período", aumente a idade máxima; em "média de views baixa", reduza a média mínima. Palavras-chave mais específicas (iguais aos títulos dos canais que você procura) também ajudam. No Radar: em "muitos vídeos", aumente **Vídeos até**; em "títulos sem as palavras-chave", use palavras mais curtas ou mude **Títulos com a palavra-chave** para "pelo menos 1 vídeo". |
+| *Digite pelo menos uma palavra-chave* | O Radar não usa mais gêneros pré-definidos: digite os estilos ou temas no campo de busca. |
 | `Address already in use` | Já existe algo na porta 8765. Use `python3 server.py --port 9000`. |
 
 ## Contribuindo
@@ -455,7 +468,7 @@ Contribuições são bem-vindas. Sugestões de melhoria:
 
 - novos idiomas e conceitos no `config.json`;
 - exportação para CSV ou planilha;
-- histórico de crescimento dos canais entre varreduras;
+- alertas quando um canal salvo acelerar;
 - mais sinais para detectar gênero.
 
 Antes de abrir um PR, rode os testes:
