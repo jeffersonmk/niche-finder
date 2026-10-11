@@ -567,12 +567,42 @@ def _video_details(yt: YouTube, vid_ids: list[str]) -> list[dict]:
 
 FUNNEL_ORDER = ["encontrados", "indisponíveis", "poucos inscritos", "muitos inscritos",
                 "sem vídeos", "muitos vídeos", "média de views baixa", "poucas views por inscrito",
-                "canal criado antes do limite", "vídeos anteriores ao período", "fora dos gêneros",
+                "canal criado antes do limite", "vídeos anteriores ao período", "títulos sem as palavras-chave",
+                "fora dos gêneros",
                 "pontuação viral baixa", "aprovados"]
 
 
+def _term_regexes(terms: list[str]) -> list[tuple[str, list[re.Pattern]]]:
+    """Cada palavra-chave vira uma lista de regex, uma por palavra (todas precisam aparecer no título, em qualquer
+    ordem). Palavras curtas (≤4 letras) precisam ser palavra inteira (aceita plural: mix → mixes); as maiores casam por prefixo."""
+    out, seen = [], set()
+    for term in terms:
+        words = [w for w in re.split(r"[^a-z0-9&]+", _norm(term)) if w]
+        if not words or tuple(words) in seen:
+            continue
+        seen.add(tuple(words))
+        out.append((term.strip(), [re.compile(r"(?<![a-z0-9])" + re.escape(w) + (r"(?:e?s)?(?![a-z0-9])" if len(w) <= 4 else ""))
+                                   for w in words]))
+    return out
+
+
+def title_match(titles: list[str], terms: list[str]) -> dict:
+    """Quantos títulos contêm pelo menos uma das palavras-chave (todas as palavras dela, em qualquer ordem)."""
+    rx = _term_regexes(terms)
+    hits, counts, example = 0, Counter(), ""
+    for title in titles:
+        n = _norm(title)
+        found = [term for term, pats in rx if all(p.search(n) for p in pats)]
+        if found:
+            hits += 1
+            counts.update(found)
+            example = example or title
+    return {"hits": hits, "of": len(titles), "term": counts.most_common(1)[0][0] if counts else "", "example": example}
+
+
 def evaluate(yt: YouTube, cfg: dict, cands: dict[str, set], crit: dict,
-             allowed_genres: list[str] | None = None, progress=None, any_genre: bool = False) -> tuple[list[dict], dict]:
+             allowed_genres: list[str] | None = None, progress=None, any_genre: bool = False,
+             title_terms: list[str] | None = None) -> tuple[list[dict], dict]:
     """Aplica os filtros e devolve (aprovados, funil com quantos canais caíram em cada filtro).
 
     Ordem (do mais barato ao mais caro em cota):
@@ -581,6 +611,8 @@ def evaluate(yt: YouTube, cfg: dict, cands: dict[str, set], crit: dict,
       3. gênero pelo conteúdo dos vídeos                                            (1 unidade)
       4. pontuação viral ≥ crit["min_viral"] (se definido)
     any_genre=True aceita canais fora dos gêneros do config (marcados como "outros").
+    title_terms: se informado, o canal só passa se pelo menos `crit["min_title_pct"]`% dos títulos dos vídeos
+    (mínimo 1 título) contiverem uma das palavras-chave.
     """
     now = datetime.now(timezone.utc)
     days = crit["days"]
@@ -649,6 +681,13 @@ def evaluate(yt: YouTube, cfg: dict, cands: dict[str, set], crit: dict,
         if not vids:
             funnel["sem vídeos"] += 1
             continue
+        tm = None
+        if title_terms:
+            tm = title_match([v["title"] for v in vids], title_terms)
+            need = max(1, math.ceil(len(vids) * crit.get("min_title_pct", 0) / 100))
+            if tm["hits"] < need:
+                funnel["títulos sem as palavras-chave"] += 1
+                continue
         genres = [g for g in classify(cfg, vids, sn["title"] + " " + sn.get("description", ""), topics) if g in allowed]
         if not genres and any_genre:
             genres = ["outros"]
@@ -687,6 +726,8 @@ def evaluate(yt: YouTube, cfg: dict, cands: dict[str, set], crit: dict,
             "history": [{"t": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "views": views, "subs": subs, "videos": nvid}],
             "checked": now.strftime("%Y-%m-%d %H:%M"),
         })
+        if tm:
+            out[-1]["title_match"] = tm
         apply_viral(out[-1], cfg, now)
         if crit.get("min_viral") and out[-1]["viral"] < crit["min_viral"]:
             out.pop()
@@ -878,8 +919,11 @@ def radar_plan(cfg: dict, langs: list[str], genres: list[str], keywords: list[st
 
 
 def radar(yt: YouTube, cfg: dict, plan: list[dict], crit: dict, genres: list[str] | None = None,
-          duration: str | None = None, any_genre: bool = False, progress=None) -> tuple[list[dict], dict]:
-    """Executa o plano do Radar e devolve os canais aprovados ordenados do mais viral para o menos viral."""
+          duration: str | None = None, any_genre: bool = False, progress=None,
+          title_terms: list[str] | None = None) -> tuple[list[dict], dict]:
+    """Executa o plano do Radar e devolve os canais aprovados ordenados do mais viral para o menos viral.
+
+    title_terms: palavras-chave que precisam aparecer nos títulos dos vídeos do canal (ver `evaluate`)."""
     cands: dict[str, set] = {}
     for i, p in enumerate(plan, 1):
         if progress:
@@ -887,7 +931,12 @@ def radar(yt: YouTube, cfg: dict, plan: list[dict], crit: dict, genres: list[str
         _merge(cands, search(yt, cfg, p["q"], p["lang"], p["days"], "video", duration or p.get("duration")))
     if progress:
         progress(f"{len(cands)} canais encontrados. Calculando pontuação viral…")
-    return evaluate(yt, cfg, cands, crit, genres, progress, any_genre=any_genre)
+    return evaluate(yt, cfg, cands, crit, genres, progress, any_genre=any_genre, title_terms=title_terms)
+
+
+def radar_title_terms(keywords: list[str], plan: list[dict]) -> list[str]:
+    """Palavras-chave digitadas + as versões traduzidas usadas nas buscas (um canal em PT com 'jazz suave' também vale)."""
+    return list(dict.fromkeys([k.strip() for k in keywords if k.strip()] + [p["q"] for p in plan]))
 
 
 # ------------------------------------------------------------------ parecidos a partir de um link

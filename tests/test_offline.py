@@ -345,6 +345,50 @@ class ViralRadarTest(unittest.TestCase):
         self.assertNotIn("uploads", ui[cid])                                     # campo interno não vai ao navegador
 
 
+class TitleKeywordTest(unittest.TestCase):
+    """Radar por palavras-chave: só passam canais cujos títulos dos vídeos contêm as palavras digitadas."""
+
+    def setUp(self):
+        self.tmp = use_temp_storage()
+        self.cfg = core.load_config()
+        self.yt = core.YouTube("fake", cache_hours=0, fetch=fake_api)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_title_match_rules(self):
+        tm = core.title_match(["Smooth JAZZ for studying", "Café jazz suave", "Rainy night piano"], ["smooth jazz"])
+        self.assertEqual((tm["hits"], tm["of"], tm["term"]), (1, 3, "smooth jazz"))
+        self.assertEqual(core.title_match(["Jazz smooth vibes"], ["smooth jazz"])["hits"], 1)       # qualquer ordem
+        self.assertEqual(core.title_match(["Música clássica"], ["musica classica"])["hits"], 1)     # sem acentos
+        self.assertEqual(core.title_match(["Best DnB mixes 2026"], ["dnb mix"])["hits"], 1)          # mix → mixes
+        self.assertEqual(core.title_match(["jazzy dnbx"], ["dnb"])["hits"], 0)                      # curta = palavra inteira
+        self.assertEqual(core.title_match(["Phonk Mix", "Lofi beats"], ["phonk", "lofi"])["hits"], 2)
+
+    def run_radar(self, kw, pct):
+        crit = core.criteria(self.cfg, {"min_viral": 0, "min_title_pct": pct}, "radar")
+        plan = core.radar_plan(self.cfg, ["en"], [], [kw], crit["days"])
+        return core.radar(self.yt, self.cfg, plan, crit, None, None, True, title_terms=core.radar_title_terms([kw], plan))
+
+    def test_radar_keeps_only_channels_with_keyword_in_titles(self):
+        res, funnel = self.run_radar("dnb mix", 30)
+        self.assertEqual([r["title"] for r in res], ["Neon Jungle"])       # "Pequenino" só tem "jungle mix"
+        self.assertGreaterEqual(funnel["títulos sem as palavras-chave"], 1)
+        self.assertEqual(res[0]["title_match"]["hits"], res[0]["title_match"]["of"])
+        self.assertEqual(res[0]["title_match"]["term"], "dnb mix")
+
+    def test_any_genre_is_accepted(self):
+        res, _ = self.run_radar("mystery", 0)                               # documentário, não música
+        self.assertEqual([r["title"] for r in res], ["Lost Mysteries"])
+
+    def test_percentage_threshold(self):
+        res, funnel = self.run_radar("flight", 0)                          # 1 de 3 títulos tem "flight"
+        self.assertEqual([r["title"] for r in res], ["Lost Mysteries"])
+        res, funnel = self.run_radar("flight", 50)
+        self.assertEqual(res, [])
+        self.assertGreaterEqual(funnel["títulos sem as palavras-chave"], 1)
+
+
 class SimilarFromLinkTest(unittest.TestCase):
     """Colar o link de um canal (ou vídeo) e achar canais novos e virais parecidos."""
 
@@ -496,13 +540,16 @@ class SecurityTest(unittest.TestCase):
         self.assertEqual(core.quota_status()["used"], 0)
 
     def test_radar_plan_and_job_never_expose_key(self):
-        code, body = self.req("/api/plan", {"radar": True, "langs": ["en"], "genres": ["musica"], "week": True})
+        code, body = self.req("/api/plan", {"radar": True, "langs": ["en"], "week": True})
+        self.assertEqual(code, 400)                                              # Radar exige palavras-chave
+        self.assertIn("palavra-chave", json.loads(body)["error"])
+        code, body = self.req("/api/plan", {"radar": True, "keywords": "dnb mix", "langs": ["en"], "week": True})
         self.assertEqual(code, 200)
         plan = json.loads(body)
         self.assertEqual(plan["cost"], len(plan["queries"]) * 100)
         self.assertEqual(core.quota_status()["used"], 0)                       # pré-visualização não gasta cota
         self.req("/api/key", {"key": self.FAKE_KEY})
-        code, body = self.req("/api/radar", {"langs": ["en"], "genres": ["musica"], "criteria": {"min_viral": 0}})
+        code, body = self.req("/api/radar", {"keywords": "dnb mix", "langs": ["en"], "criteria": {"min_viral": 0}})
         self.assertEqual(code, 200)
         jid = json.loads(body)["job"]
         import time
@@ -512,6 +559,7 @@ class SecurityTest(unittest.TestCase):
                 break
             time.sleep(0.1)
         self.assertEqual(json.loads(body)["status"], "done", body)
+        self.assertEqual([r["title"] for r in json.loads(body)["results"]], ["Neon Jungle"])
         self.assertNotIn(self.FAKE_KEY, body)
         self.assertNotIn(self.FAKE_KEY, self.req("/api/state")[1])
         for f in self.tmp.rglob("*"):

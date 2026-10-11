@@ -14,7 +14,8 @@
     "max_videos": 40,
     "min_avg_views": 2000,
     "min_views_per_sub": 5,
-    "min_viral": 35
+    "min_viral": 35,
+    "min_title_pct": 30
   },
   "viral_weights": {
     "views": 0.1,

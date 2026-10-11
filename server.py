@@ -69,8 +69,11 @@ def _similar_langs(cfg: dict, ch: dict, chosen) -> list[str]:
 
 
 def _radar_plan(cfg: dict, b: dict, langs: list[str], crit: dict) -> list[dict]:
-    genres = [g for g in (b.get("genres") or []) if g in cfg["categories"]] or list(cfg["categories"])
-    return core.radar_plan(cfg, langs, genres, _keywords(b.get("keywords")), crit["days"], bool(b.get("week")))
+    """O Radar busca só pelas palavras-chave digitadas (sem conceitos de gêneros pré-definidos)."""
+    kws = _keywords(b.get("keywords"))
+    if not kws:
+        return []
+    return core.radar_plan(cfg, langs, [], kws, crit["days"], bool(b.get("week")))
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -178,6 +181,8 @@ class Handler(BaseHTTPRequestHandler):
                 if b.get("radar"):
                     rcrit = core.criteria(cfg, b.get("criteria"), "radar")
                     plan = {"queries": _radar_plan(cfg, b, langs, rcrit)}
+                    if not plan["queries"]:
+                        return self._json({"error": "Digite pelo menos uma palavra-chave."}, 400)
                     plan["cost"] = len(plan["queries"]) * 100
                     plan["remaining"] = core.quota_status()["remaining"]
                     return self._json(plan)
@@ -213,12 +218,14 @@ class Handler(BaseHTTPRequestHandler):
                 rcrit = core.criteria(cfg, b.get("criteria"), "radar")
                 plan = _radar_plan(cfg, b, langs, rcrit)
                 if not plan:
-                    return self._json({"error": "Nenhuma busca para fazer: escolha gêneros ou digite palavras-chave."}, 400)
+                    return self._json({"error": "Digite pelo menos uma palavra-chave."}, 400)
                 client = yt()
+                terms = core.radar_title_terms(_keywords(b.get("keywords")), plan)
 
                 def fn(progress):
-                    res, funnel = core.radar(client, cfg, plan, rcrit, genres, b.get("duration") or None,
-                                             bool(b.get("any_genre")), progress)
+                    # qualquer gênero: o filtro é o título conter as palavras-chave
+                    res, funnel = core.radar(client, cfg, plan, rcrit, None, b.get("duration") or None,
+                                             True, progress, title_terms=terms)
                     core.save_results(res, cfg)
                     return res, funnel, {"queries": plan}
                 return self._json({"job": start_job("radar", fn)})
@@ -328,7 +335,7 @@ if __name__ == "__main__":
     ap.add_argument("--keywords", help="busca por palavras-chave separadas por vírgula, pelo terminal")
     ap.add_argument("--langs", help="idiomas separados por vírgula (padrão: scan_languages do config)")
     ap.add_argument("--days", type=int, help="idade máxima do 1º vídeo, em dias")
-    ap.add_argument("--radar", action="store_true", help="Radar viral: canais novos explodindo (usa --keywords se houver)")
+    ap.add_argument("--radar", action="store_true", help="Radar viral: canais novos explodindo com --keywords nos títulos")
     ap.add_argument("--like", metavar="LINK", help="canais novos e virais parecidos com o canal deste link")
     a = ap.parse_args()
     if a.like:
@@ -351,10 +358,13 @@ if __name__ == "__main__":
         cfg = core.load_config()
         crit = core.criteria(cfg, {"days": a.days}, "radar")
         langs = a.langs.split(",") if a.langs else cfg["scan_languages"]
-        plan = core.radar_plan(cfg, langs, list(cfg["categories"]), _keywords(a.keywords), crit["days"])
+        if not _keywords(a.keywords):
+            sys.exit('O Radar precisa de palavras-chave: --radar --keywords "smooth jazz, phonk mix"')
+        plan = core.radar_plan(cfg, langs, [], _keywords(a.keywords), crit["days"])
         print(f"Radar: {len(plan)} buscas, ~{len(plan) * 100} unidades")
         client = yt()
-        res, funnel = core.radar(client, cfg, plan, crit, None, None, bool(a.keywords), print)
+        res, funnel = core.radar(client, cfg, plan, crit, None, None, True, print,
+                                 title_terms=core.radar_title_terms(_keywords(a.keywords), plan))
         core.save_results(res, cfg)
         print("\nFunil: " + " · ".join(f"{k}: {v}" for k, v in funnel.items()))
         for r in res:

@@ -43,7 +43,7 @@ Um canal **criado há poucas semanas** que já tem milhares de inscritos e cente
 
 | | |
 |---|---|
-| 🔥 **Radar viral** | Aba principal. Procura vídeos que estão bombando no período e aprova só canais **novos** (1º vídeo há ≤ 30 dias), **pequenos** (≤ 100 mil inscritos), com **poucos vídeos** (≤ 40) e views muito acima do esperado. Resultado em cards ranqueados do mais viral ao menos viral. |
+| 🔥 **Radar viral** | Aba principal. Você digita as **palavras-chave** (ex.: *smooth jazz, phonk mix*) — sem gêneros pré-definidos. O app procura vídeos que estão bombando no período e aprova só canais **cujos títulos dos vídeos contêm as palavras-chave**, **novos** (1º vídeo há ≤ 30 dias), **pequenos** (≤ 100 mil inscritos), com **poucos vídeos** (≤ 40) e média ≥ 2.000 views. Aceita qualquer gênero. |
 | 🚀 **Pontuação viral (0–100)** | 7 fatores: views totais, views por vídeo, views por inscrito, poucos vídeos, idade do canal, recência das views e desempenho fora da curva para o tamanho. Cada card mostra a barra de cada fator em "Por que esta pontuação?". |
 | 🔗 **Parecidos com um canal** | Cole o link de qualquer canal (`@nome`, `/channel/UC…`, `/c/`, `/user/`) ou de um vídeo dele (`watch?v=`, `youtu.be/`, `/shorts/`). O app analisa o canal (~3 unidades), sugere buscas a partir dos vídeos mais vistos (editáveis) e encontra canais **novos e virais** parecidos, ranqueados pela pontuação viral. |
 | ⟳ **Crescimento medido** | "Atualizar salvos" recheca os canais por ~3 unidades cada (sem buscas de 100). A partir da 2ª checagem o card mostra as **views/dia reais** entre as checagens, em vez da estimativa. |
@@ -113,8 +113,8 @@ Opções:
 python3 server.py --port 9000       # usa outra porta
 python3 server.py --no-browser      # não abre o navegador automaticamente
 python3 server.py --scan            # faz uma varredura completa pelo terminal, sem interface
-python3 server.py --radar --langs en,pt                     # Radar viral pelo terminal (ranking do mais viral)
-python3 server.py --radar --keywords "liquid dnb mix" --days 60   # Radar com palavras-chave
+python3 server.py --radar --keywords "smooth jazz, phonk mix" --langs en,pt   # Radar viral pelo terminal (palavras-chave obrigatórias)
+python3 server.py --radar --keywords "liquid dnb mix" --days 60   # Radar com 1º vídeo há até 60 dias
 python3 server.py --like "https://www.youtube.com/@canal" --langs en,pt   # canais novos e virais parecidos com um canal
 python3 server.py --keywords "atmospheric jungle mix, liquid dnb" --langs en,pt   # busca por palavras-chave pelo terminal
 python3 server.py --scan --days 60  # muda a idade máxima do 1º vídeo
@@ -218,7 +218,10 @@ Cada termo é limitado entre 0 e 1. A escala logarítmica evita que um único vi
 
 ### Radar viral e pontuação viral
 
-O Radar usa os conceitos dos gêneros marcados (ou as palavras-chave digitadas, traduzidas para os idiomas marcados) e busca **vídeos publicados no período, ordenados por views**. Os canais desses vídeos passam pelos filtros do bloco `radar` do `config.json` (idade do 1º vídeo, inscritos, nº de vídeos, média de views, views/inscrito, gênero) e, por fim, pela **pontuação viral mínima**. A opção *+ vídeos da última semana* repete cada busca só com vídeos dos últimos 7 dias, para pegar quem está subindo agora (custa o dobro).
+O Radar usa **só as palavras-chave digitadas** (traduzidas para os idiomas marcados; nomes de estilo como *jazz*, *phonk* e *lofi* não são traduzidos) e busca **vídeos publicados no período, ordenados por views**. Os canais desses vídeos passam pelos filtros do bloco `radar` do `config.json` (idade do 1º vídeo, inscritos, nº de vídeos, média de views, views/inscrito, gênero) e, por fim, pela **pontuação viral mínima**. A opção *+ vídeos da última semana* repete cada busca só com vídeos dos últimos 7 dias, para pegar quem está subindo agora (custa o dobro).
+
+**Filtro de títulos.** Depois dos filtros de tamanho e idade, o app lê os títulos dos vídeos do canal e só aprova se uma das palavras-chave (ou a tradução dela) aparece em pelo menos **30%** dos títulos (ajustável na tela: pelo menos 1 vídeo, 30%, metade ou todos). Uma palavra-chave "aparece" quando **todas as palavras dela** estão no título, em qualquer ordem, sem diferença de acentos ou maiúsculas, e com plural (*mix* → *mixes*). O card mostra, por exemplo, **🎯 "smooth jazz" em 8/23 títulos**. O gênero (Música, Documentário…) vira só uma etiqueta informativa — canais de qualquer gênero passam. A varredura (↻) continua usando os conceitos do `config.json`.
+
 
 Cada fator vai de 0 a 1 (escala logarítmica, para um único viral não dominar o ranking):
 
@@ -269,6 +272,7 @@ A tradução usa o serviço público do Google Tradutor (com o MyMemory como res
 | `radar.max_videos` | `40` | Radar: máximo de vídeos publicados. |
 | `radar.min_avg_views` / `min_views_per_sub` | `2000` / `5` | Radar: média mínima de views por vídeo e views por inscrito. |
 | `radar.min_viral` | `35` | Radar: pontuação viral mínima para aparecer. |
+| `radar.min_title_pct` | `30` | Radar: % mínima dos títulos dos vídeos que precisam conter uma palavra-chave (0 = pelo menos 1 vídeo). |
 | `viral_weights` | ver tabela acima | Peso de cada fator da pontuação viral. |
 | `criteria.max_videos` | `200` | Máximo de vídeos (acima disso não dá para confirmar o 1º vídeo sem gastar muita cota). |
 | `default_mode` | `"video"` | `video` = vídeos em alta no período; `both` = também canais criados no período (custa o dobro). |
@@ -373,8 +377,8 @@ O servidor escuta só em `127.0.0.1`. Todas as respostas são JSON.
 | `POST` | `/api/plan` | `{"keywords": "a, b", "langs": ["pt","en"]}` ou `{"channel": "<id>"}`: mostra as buscas traduzidas e o custo, sem gastar cota do YouTube. |
 | `POST` | `/api/search` | `{"keywords": "a, b", "langs": [...], "translate": true, "genres": [...], "duration": "long", "criteria": {...}}` inicia uma busca por palavras-chave. |
 | `POST` | `/api/similar` | `{"channel": "<id>", "langs": [...]}` busca canais parecidos. |
-| `POST` | `/api/plan` | `{"radar": true, "keywords": "", "langs": [...], "genres": [...], "week": false, "criteria": {...}}`: plano do Radar e custo, sem gastar cota. |
-| `POST` | `/api/radar` | Mesmo corpo + `"any_genre"` e `"duration"`: roda o Radar viral. |
+| `POST` | `/api/plan` | `{"radar": true, "keywords": "smooth jazz, phonk mix", "langs": [...], "week": false, "criteria": {...}}`: plano do Radar e custo, sem gastar cota (sem palavras-chave → erro 400). |
+| `POST` | `/api/radar` | Mesmo corpo + `"duration"`: roda o Radar viral, filtrando canais pelos títulos dos vídeos. |
 | `POST` | `/api/channel_lookup` | `{"url": "<link>", "langs": [...]}`: identifica o canal (~3 unidades) e devolve o resumo, as buscas sugeridas e o custo. |
 | `POST` | `/api/similar_link` | `{"channel": "<id>", "queries": [...], "langs": [...], "duration": "any", "same_genre": true, "criteria": {...}}`: busca canais novos e virais parecidos. |
 | `POST` | `/api/refresh` | `{"ids": [...]}` (vazio = todos): rechecagem dos canais salvos (~3 unidades por canal). |
@@ -399,6 +403,7 @@ Os testes verificam que:
 - títulos viram buscas (tema + estilo) e a tradução preserva termos como *dnb* e *jungle*;
 - a busca por palavras-chave, os parecidos em outro idioma, a nota e o contador de cota funcionam;
 - a pontuação viral sobe com cada fator, fica entre 0 e 100, respeita os pesos, e o Radar ordena do mais viral ao menos viral (classe `ViralRadarTest`);
+- o Radar só aprova canais cujos títulos contêm as palavras-chave (qualquer ordem, sem acentos, plural), de qualquer gênero, respeitando a % mínima (classe `TitleKeywordTest`);
 - a rechecagem grava histórico e mede o crescimento real; registros antigos ganham pontuação na hora;
 - a busca por link entende todos os formatos de URL, resolve `@handle` e vídeos, não devolve o próprio canal e ranqueia pela pontuação viral (classe `SimilarFromLinkTest`);
 - a chave nunca vaza — nem pelo Radar, nem pela busca por link, nem no front-end (`web/` não contém chave nem chamadas diretas a `googleapis.com`) (classe `SecurityTest`).

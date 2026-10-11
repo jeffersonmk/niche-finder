@@ -1,6 +1,6 @@
 "use strict";
 const $ = s => document.querySelector(s);
-const S = { channels: [], config: null, genre: "", lang: "", sort: "viral", text: "", maxAge: "", maxSubs: "", scanLangs: [], kwLangs: [], rGenres: [] };
+const S = { channels: [], config: null, genre: "", lang: "", sort: "viral", text: "", maxAge: "", maxSubs: "", scanLangs: [], kwLangs: [] };
 const FLAG = { pt: "🇧🇷", en: "🇺🇸", es: "🇪🇸", ja: "🇯🇵", fr: "🇫🇷", de: "🇩🇪" };
 
 const fmt = n => n >= 1e9 ? (n / 1e9).toFixed(2) + "B" : n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(n);
@@ -35,6 +35,7 @@ function banner(msg, isErr) { const b = $("#banner"); b.hidden = !msg; b.textCon
 function busy(on) { ["#scanBtn", "#refreshBtn", "#kwForm button", "#radarForm button", "#linkForm button", "#linkGo"].forEach(s => { if ($(s)) $(s).disabled = on; }); document.querySelectorAll(".similar-btn, .refresh-one").forEach(b => b.disabled = on); }
 
 const FUNNEL_HINT = {
+  "títulos sem as palavras-chave": "poucos títulos com a palavra-chave — mude “Títulos com a palavra-chave” para “pelo menos 1 vídeo” ou use palavras mais curtas",
   "vídeos anteriores ao período": "canais com mais tempo — aumente “1º vídeo há no máx.”",
   "média de views baixa": "baixe “Média de views mín.”",
   "fora dos gêneros": "conteúdo fora de Música/Documentário/Curiosidades/Ensino",
@@ -101,10 +102,9 @@ async function load() {
   $("#rMaxVid").value = rs.max_videos ?? rc.max_videos;
   $("#rAvg").value = rs.min_avg_views ?? rc.min_avg_views;
   $("#rMinViral").value = rs.min_viral ?? rc.min_viral;
+  $("#rTitlePct").value = String(rs.min_title_pct ?? rc.min_title_pct ?? 30);
   $("#rWeek").checked = stored("radar-week", false);
-  $("#rAny").checked = stored("radar-any", false);
   $("#rDuration").value = stored("radar-duration", "");
-  S.rGenres = stored("radar-genres", Object.keys(st.config.genres));
   setTab(stored("tab", "radar"));
   $("#keyState").textContent = st.has_key ? "✓ Chave configurada" : "Nenhuma chave salva ainda";
   if (!st.has_key) banner("Configure sua chave da YouTube Data API em ⚙ Configurações para começar a buscar canais.");
@@ -133,11 +133,6 @@ function buildControls() {
   langChips($("#scanLangs"), S.scanLangs, l => { S.scanLangs = toggle(S.scanLangs, l); store("scan-langs", S.scanLangs); buildControls(); });
   langChips($("#kwLangs"), S.kwLangs, l => { S.kwLangs = toggle(S.kwLangs, l); store("kw-langs", S.kwLangs); buildControls(); hidePlan(); });
   langChips($("#rLangs"), S.kwLangs, l => { S.kwLangs = toggle(S.kwLangs, l); store("kw-langs", S.kwLangs); buildControls(); hideRadarPlan(); });
-  $("#rGenres").innerHTML = Object.entries(g).map(([k, v]) =>
-    `<button type="button" class="chip ${S.rGenres.includes(k) ? "on" : ""}" data-g="${k}">${esc(v)}</button>`).join("");
-  $("#rGenres").querySelectorAll(".chip").forEach(b => b.onclick = () => {
-    S.rGenres = toggle(S.rGenres, b.dataset.g); store("radar-genres", S.rGenres); buildControls(); hideRadarPlan();
-  });
   updateCost();
 }
 async function updateCost() {
@@ -225,7 +220,9 @@ function card(c, i) {
     if (m) el.querySelector(".top").insertAdjacentHTML("beforeend", `<li class="hit"><span class="muted small">Contém:</span><a title="${esc(m)}">${esc(m)}</a></li>`);
   }
   const fmtKind = c.shorts_share >= .6 ? "Shorts" : c.shorts_share <= .2 ? (c.avg_minutes >= 20 ? `Longos (~${Math.round(c.avg_minutes)} min)` : "Vídeos longos") : "Misto";
-  const found = [...(c.similar_to || []).slice(-1).map(t => `≈ ${t}`), ...(c.found_by || []).slice(0, 2).map(f => `🔎 ${f.q}`)];
+  const tm = c.title_match;
+  const found = [...(tm ? [`🎯 “${tm.term}” em ${tm.hits}/${tm.of} títulos`] : []),
+                 ...(c.similar_to || []).slice(-1).map(t => `≈ ${t}`), ...(c.found_by || []).slice(0, 2).map(f => `🔎 ${f.q}`)];
   el.querySelector(".tags").innerHTML = [
     `${FLAG[c.lang] || "🌐"} ${c.lang ? langName(c.lang) : "idioma ?"}`,
     ...c.genres.map(g => S.config.genres[g] || (g === "outros" ? "Outros" : g)), fmtKind, ...found,
@@ -259,7 +256,7 @@ function render() {
   const e = $("#empty");
   e.hidden = list.length > 0;
   if (!S.channels.length) e.innerHTML = S.hasKey
-    ? `Nenhum canal salvo ainda. Clique em <b>🔥 Rodar radar</b> para encontrar canais novos que estão viralizando.`
+    ? `Nenhum canal salvo ainda. Digite palavras-chave no Radar (ex.: <i>smooth jazz, phonk mix</i>) e clique em <b>🔥 Rodar radar</b>.`
     : `Nenhum canal ainda. Configure a chave da API em ⚙ Configurações.`;
   else e.innerHTML = S.text ? `Nenhum canal salvo tem “${esc(S.text)}”.` : "Nenhum canal com esses filtros.";
 }
@@ -343,19 +340,19 @@ document.querySelectorAll(".tab").forEach(b => b.onclick = () => setTab(b.datase
 /* ---------------- radar viral ---------------- */
 function radarCrit() {
   return { days: +$("#rDays").value, max_subscribers: +$("#rMaxSubs").value || 0, max_videos: +$("#rMaxVid").value || 200,
-           min_avg_views: +$("#rAvg").value || 0, min_viral: +$("#rMinViral").value || 0 };
+           min_avg_views: +$("#rAvg").value || 0, min_viral: +$("#rMinViral").value || 0, min_title_pct: +$("#rTitlePct").value };
 }
 function hideRadarPlan() { $("#rPlan").hidden = true; S.rplan = null; $("#radarForm button").textContent = "🔥 Rodar radar"; }
-["#rDays", "#rMaxSubs", "#rMaxVid", "#rAvg", "#rMinViral"].forEach(s => $(s).onchange = () => { store("radar-crit", radarCrit()); hideRadarPlan(); });
+["#rDays", "#rMaxSubs", "#rMaxVid", "#rAvg", "#rMinViral", "#rTitlePct"].forEach(s => $(s).onchange = () => { store("radar-crit", radarCrit()); hideRadarPlan(); });
 $("#rWeek").onchange = e => { store("radar-week", e.target.checked); hideRadarPlan(); };
-$("#rAny").onchange = e => { store("radar-any", e.target.checked); hideRadarPlan(); };
 $("#rDuration").onchange = e => { store("radar-duration", e.target.value); hideRadarPlan(); };
 $("#rKw").oninput = hideRadarPlan;
 
 $("#radarForm").onsubmit = async ev => {
   ev.preventDefault();
-  const body = { radar: true, keywords: $("#rKw").value.trim(), langs: S.kwLangs, genres: S.rGenres,
-                 week: $("#rWeek").checked, any_genre: $("#rAny").checked, duration: $("#rDuration").value,
+  const keywords = $("#rKw").value.trim();
+  if (!keywords) { banner("Digite pelo menos uma palavra-chave (ex.: smooth jazz, phonk mix).", true); $("#rKw").focus(); return; }
+  const body = { radar: true, keywords, langs: S.kwLangs, week: $("#rWeek").checked, duration: $("#rDuration").value,
                  criteria: radarCrit() };
   const sig = JSON.stringify(body);
   // 1º clique: mostra as buscas e o custo (sem gastar cota); 2º clique: executa
@@ -368,7 +365,7 @@ $("#radarForm").onsubmit = async ev => {
       const over = p.cost > p.remaining;
       $("#rPlan").innerHTML = `<div><b>${p.queries.length} buscas</b> · custo ~${full(p.cost)} unidades + ~3 por canal avaliado · disponível hoje: <b class="${over ? "bad" : ""}">${full(p.remaining)}</b></div>
         <div class="plan-list">${p.queries.map(x => `<span class="pq">${FLAG[x.lang] || ""} ${esc(x.q)} <span class="muted">· ${x.days}d</span></span>`).join("")}</div>
-        <div class="muted small">${over ? "⚠ Cota insuficiente — desmarque gêneros/idiomas. " : ""}Clique em <b>Confirmar radar</b> para executar.</div>`;
+        <div class="muted small">${over ? "⚠ Cota insuficiente — use menos palavras-chave ou idiomas. " : ""}Clique em <b>Confirmar radar</b> para executar.</div>`;
       $("#radarForm button").textContent = "Confirmar radar";
     } catch (e) { banner(e.message, true); } finally { status(""); }
     return;

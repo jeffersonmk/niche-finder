@@ -43,12 +43,9 @@
 <section class="panel radar-panel" id="radarPanel">
   <form id="radarForm" class="kw-row">
     <input id="rKw" type="search" autocomplete="off"
-           placeholder="Opcional: palavras-chave (vírgula separa). Vazio = usa os conceitos dos gêneros marcados abaixo">
+           placeholder="Palavras-chave que precisam estar nos títulos dos vídeos — vírgula separa (ex.: smooth jazz, phonk mix)">
     <button class="btn primary hot" type="submit">🔥 Rodar radar</button>
   </form>
-  <div class="opts">
-    <span class="opt">Gêneros</span><div class="chips" id="rGenres"></div>
-  </div>
   <div class="opts">
     <span class="opt">Idiomas</span><div class="chips" id="rLangs"></div>
   </div>
@@ -63,11 +60,17 @@
     <label class="opt">Vídeos até <input id="rMaxVid" type="number" min="1" step="5" class="num-in sm"></label>
     <label class="opt">Média de views mín. <input id="rAvg" type="number" min="0" step="500" class="num-in"></label>
     <label class="opt">Pontuação viral mín. <input id="rMinViral" type="number" min="0" max="100" step="5" class="num-in sm"></label>
+    <label class="opt" title="Quantos vídeos do canal precisam ter uma das palavras-chave no título">Títulos com a palavra-chave
+      <select id="rTitlePct">
+        <option value="0">pelo menos 1 vídeo</option><option value="30">30% dos vídeos</option>
+        <option value="50">metade dos vídeos</option><option value="100">todos os vídeos</option>
+      </select>
+    </label>
   </div>
   <div class="opts">
     <label class="opt">Duração
       <select id="rDuration">
-        <option value="">Padrão do gênero</option>
+        <option value="">Qualquer</option>
         <option value="long">Longos (&gt; 20 min)</option>
         <option value="medium">Médios (4–20 min)</option>
         <option value="short">Curtos (&lt; 4 min)</option>
@@ -75,8 +78,6 @@
     </label>
     <label class="opt" title="Repete cada busca só com vídeos dos últimos 7 dias — acha quem está subindo AGORA (custa o dobro)">
       <input type="checkbox" id="rWeek"> + vídeos da última semana (2× custo)</label>
-    <label class="opt" title="Com palavras-chave: aprova canais mesmo fora de Música/Documentário/Curiosidades/Ensino">
-      <input type="checkbox" id="rAny"> aceitar qualquer gênero</label>
   </div>
   <div class="plan" id="rPlan" hidden></div>
 </section>
