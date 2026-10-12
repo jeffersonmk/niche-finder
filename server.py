@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 import sys
 import threading
@@ -307,9 +308,29 @@ class Handler(BaseHTTPRequestHandler):
         self._json({"error": "rota desconhecida"}, 404)
 
 
+def _already_running(url: str) -> bool:
+    """True se o Niche Finder já está respondendo nessa porta."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(url + "/api/state", timeout=2) as r:
+            return "has_key" in json.loads(r.read() or b"{}")
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def serve(port=8765, open_browser=True):
-    srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     url = f"http://127.0.0.1:{port}"
+    try:
+        srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    except OSError as e:
+        if e.errno != errno.EADDRINUSE:
+            raise
+        if _already_running(url):
+            print(f"O Niche Finder já está rodando em {url} — abrindo no navegador.")
+            if open_browser:
+                webbrowser.open(url)
+            return None
+        sys.exit(f"A porta {port} está ocupada por outro programa. Use outra porta: python3 server.py --port 9000")
     print(f"Niche Finder rodando em {url}  (Ctrl+C para parar)")
     if open_browser:
         threading.Timer(0.5, lambda: webbrowser.open(url)).start()
