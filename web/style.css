@@ -220,3 +220,10 @@ code { background: var(--chip); padding: 1px 5px; border-radius: 4px; font-size:
   .sep { display: none; }
   .toolbar-right { margin-left: 0; }
 }
+
+.pq-sep { align-self: center; margin-left: 6px; }
+.near-title { margin: 22px 0 8px; font-size: 15px; }
+.near-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.near-list li { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; padding: 8px 12px; border: 1px solid var(--card-border); border-radius: 10px; background: var(--card); }
+.near-list a { font-weight: 600; }
+.tag-miss { margin-left: auto; font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--card-border); color: var(--muted); }

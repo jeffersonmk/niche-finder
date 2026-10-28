@@ -320,24 +320,39 @@ def _http_json(url: str) -> object:
         return json.load(r)
 
 
-def _translate_http(text: str, target: str) -> tuple[str, str]:
+_MT_ERRORS = re.compile(r"PLEASE SELECT|MYMEMORY WARNING|INVALID|QUERY LENGTH|NO QUERY|LIMIT", re.I)
+
+
+def _translate_http(text: str, target: str, source: str | None = None) -> tuple[str, str]:
     """Traduz `text` para `target`. Retorna (tradução, idioma detectado da origem).
 
-    1º Google Tradutor (endpoint público, sem chave); se falhar, MyMemory (assume origem em inglês).
+    1º Google Tradutor (endpoint público, sem chave); se falhar (ex.: 429), MyMemory com detecção
+    automática do idioma de origem. Mensagens de erro do MyMemory nunca viram "tradução".
     Só o texto da busca é enviado — nunca a chave da API.
     """
     try:
         r = _http_json("https://translate.googleapis.com/translate_a/single?" + urllib.parse.urlencode(
-            {"client": "gtx", "sl": "auto", "tl": target, "dt": "t", "q": text}))
+            {"client": "gtx", "sl": source or "auto", "tl": target, "dt": "t", "q": text}))
         return "".join(seg[0] for seg in r[0] if seg and seg[0]), str(r[2] or "")
+    except Exception:  # noqa: BLE001
+        pass
+    try:        # mesmo Google por outra porta (limite de uso separado do endpoint acima)
+        r = _http_json("https://clients5.google.com/translate_a/t?" + urllib.parse.urlencode(
+            {"client": "dict-chrome-ex", "sl": source or "auto", "tl": target, "q": text}))
+        first = r[0] if isinstance(r, list) and r else None
+        if isinstance(first, list) and first and first[0]:
+            return str(first[0]), str(first[1] if len(first) > 1 else source or "")
+        if isinstance(first, str) and first:
+            return first, source or ""
     except Exception:  # noqa: BLE001
         pass
     try:
         r = _http_json("https://api.mymemory.translated.net/get?" + urllib.parse.urlencode(
-            {"q": text, "langpair": f"en|{target}"}))
-        out = r["responseData"]["translatedText"]
-        if out and "MYMEMORY WARNING" not in out:
-            return out, "en"
+            {"q": text, "langpair": f"{source or 'Autodetect'}|{target}"}))
+        out = (r.get("responseData") or {}).get("translatedText") or ""
+        if (out and str(r.get("responseStatus", 200)) == "200" and not _MT_ERRORS.search(out)
+                and float((r.get("responseData") or {}).get("match") or 0) >= 0.5):
+            return out, source or str((r.get("responseData") or {}).get("detectedLanguage") or "")
     except Exception:  # noqa: BLE001
         pass
     raise TranslateError(text)
@@ -346,35 +361,38 @@ def _translate_http(text: str, target: str) -> tuple[str, str]:
 _translator = _translate_http  # substituível nos testes
 
 
-def translate(text: str, target: str) -> tuple[str, str]:
-    """Tradução com cache em disco (30 dias)."""
-    ck = hashlib.sha1(json.dumps([text, target]).encode()).hexdigest()
+def translate(text: str, target: str, source: str | None = None) -> tuple[str, str]:
+    """Tradução com cache em disco (30 dias). `source` (opcional) fixa o idioma de origem: a detecção
+    automática confunde português com espanhol."""
+    ck = hashlib.sha1(json.dumps([text, target] + ([source] if source else [])).encode()).hexdigest()
     cf = CACHE_DIR / f"translate_{ck}.json"
     if cf.exists() and time.time() - cf.stat().st_mtime < 30 * 86400:
-        return tuple(json.loads(cf.read_text()))
-    out = _translator(text, target)
+        cached = tuple(json.loads(cf.read_text()))
+        if not _MT_ERRORS.search(cached[0]):          # ignora entradas envenenadas por erros antigos do MyMemory
+            return cached
+    out = _translator(text, target, source) if source else _translator(text, target)
     CACHE_DIR.mkdir(exist_ok=True)
     cf.write_text(json.dumps(list(out), ensure_ascii=False))
     return out
 
 
-def _protected_rx(cfg: dict) -> re.Pattern | None:
-    terms = sorted({_norm(t) for t in cfg.get("protected_terms", []) if t.strip()}, key=len, reverse=True)
+def _protected_rx(cfg: dict, keys: tuple[str, ...] = ("protected_terms",)) -> re.Pattern | None:
+    terms = sorted({_norm(t) for k in keys for t in cfg.get(k, []) if t.strip()}, key=len, reverse=True)
     if not terms:
         return None
     return re.compile(r"(?<![\w])(" + "|".join(re.escape(t) for t in terms) + r")(?![\w])", re.IGNORECASE)
 
 
-def translate_query(cfg: dict, text: str, target: str) -> str:
+def translate_query(cfg: dict, text: str, target: str, source: str | None = None) -> str:
     """Traduz uma busca preservando nomes de gêneros musicais (dnb, jungle, breakcore, lofi, mix…).
 
     'atmospheric jungle dnb mix' -> PT: 'atmosférico jungle dnb mix' (e não 'mix de dnb da selva').
     Se a tradução falhar, devolve o texto original.
     """
     text = re.sub(r"\s+", " ", text).strip()
-    if not text:
+    if not text or (source and source == target):
         return text
-    rx = _protected_rx(cfg)
+    rx = _protected_rx(cfg, ("protected_terms", "untranslated_names"))     # gêneros + nomes próprios
     pieces, last = [], 0
     for m in (rx.finditer(_norm(text)) if rx else []):
         pieces.append(("t", text[last:m.start()]))
@@ -385,7 +403,7 @@ def translate_query(cfg: dict, text: str, target: str) -> str:
     for kind, s in pieces:
         if kind == "t" and re.search(r"[^\W\d_]", s):
             try:
-                tr, src = translate(s.strip(), target)
+                tr, src = translate(s.strip(), target, source)
                 out.append(s.strip() if _lang_of(src) == target else tr)
             except TranslateError:
                 out.append(s.strip())
@@ -460,6 +478,8 @@ def title_queries(cfg: dict, channel: dict) -> list[str]:
         if th and len(th) >= 3:
             themes.append(th)
     out = []
+    if styles and not genre_terms(cfg, styles.most_common(1)[0][0]):
+        styles = Counter()          # o trecho entre parênteses não é um estilo musical: vale o título inteiro
     if styles:
         style = styles.most_common(1)[0][0]
         out.append(style)
@@ -565,6 +585,7 @@ def _video_details(yt: YouTube, vid_ids: list[str]) -> list[dict]:
     return vids
 
 
+NEAR_FACTOR = 3.0        # "quase aprovado" = passou raspando: até 3× o limite de um único filtro
 FUNNEL_ORDER = ["encontrados", "indisponíveis", "poucos inscritos", "muitos inscritos",
                 "sem vídeos", "muitos vídeos", "média de views baixa", "poucas views por inscrito",
                 "canal criado antes do limite", "vídeos anteriores ao período", "títulos sem as palavras-chave",
@@ -602,8 +623,10 @@ def title_match(titles: list[str], terms: list[str]) -> dict:
 
 def evaluate(yt: YouTube, cfg: dict, cands: dict[str, set], crit: dict,
              allowed_genres: list[str] | None = None, progress=None, any_genre: bool = False,
-             title_terms: list[str] | None = None) -> tuple[list[dict], dict]:
+             title_terms: list[str] | None = None, near: list | None = None) -> tuple[list[dict], dict]:
     """Aplica os filtros e devolve (aprovados, funil com quantos canais caíram em cada filtro).
+
+    near: se for uma lista, recebe os canais que ficaram a um passo de passar (ver `_near_miss`) — sem custo extra.
 
     Ordem (do mais barato ao mais caro em cota):
       1. inscritos, nº de vídeos, média de views por vídeo e views por inscrito   (1 unidade a cada 50 canais)
@@ -625,6 +648,18 @@ def evaluate(yt: YouTube, cfg: dict, cands: dict[str, set], crit: dict,
     funnel["indisponíveis"] = len(cands) - len(channels)
     allowed = set(allowed_genres or cfg["categories"])
 
+    def miss(cid, ch, reason, ratio, age=None):
+        """Registra um quase aprovado (ratio = quão longe do limite, 1 = no limite)."""
+        if near is None or ratio > NEAR_FACTOR:
+            return
+        st, sn = ch.get("statistics", {}), ch["snippet"]
+        nv = int(st.get("videoCount", 0))
+        near.append({"id": cid, "title": sn["title"], "url": f"https://www.youtube.com/channel/{cid}",
+                     "subscribers": int(st.get("subscriberCount", 0)), "videos": nv,
+                     "avg_views": round(int(st.get("viewCount", 0)) / max(nv, 1)), "reason": reason,
+                     "age_days": round(age) if age is not None else None, "hits": len(cands[cid]),
+                     "found_by": [{"q": q, "lang": l} for q, l in sorted(cands[cid])]})
+
     out = []
     for n, (cid, ch) in enumerate(channels.items(), 1):
         if progress:
@@ -638,16 +673,19 @@ def evaluate(yt: YouTube, cfg: dict, cands: dict[str, set], crit: dict,
             continue
         if not hidden and crit.get("max_subscribers") and subs > crit["max_subscribers"]:
             funnel["muitos inscritos"] += 1
+            miss(cid, ch, "muitos inscritos", subs / crit["max_subscribers"])
             continue
         if nvid == 0:
             funnel["sem vídeos"] += 1
             continue
         if nvid > crit["max_videos"]:
             funnel["muitos vídeos"] += 1
+            miss(cid, ch, "muitos vídeos", nvid / max(crit["max_videos"], 1))
             continue
         avg = views / nvid
         if avg < crit["min_avg_views"]:
             funnel["média de views baixa"] += 1
+            miss(cid, ch, "média de views baixa", crit["min_avg_views"] / max(avg, 1))
             continue
         if not hidden and views / max(subs, 1) < crit["min_views_per_sub"]:
             funnel["poucas views por inscrito"] += 1
@@ -675,6 +713,8 @@ def evaluate(yt: YouTube, cfg: dict, cands: dict[str, set], crit: dict,
             continue
         if oldest is None or (now - oldest).days > days:
             funnel["vídeos anteriores ao período"] += 1     # inclui canais antigos que voltaram a postar
+            if oldest is not None:
+                miss(cid, ch, "1º vídeo fora do período", (now - oldest).days / max(days, 1), (now - oldest).days)
             continue
         vids = _video_details(yt, vid_ids)
         topics = [t.rsplit("/", 1)[-1] for t in ch.get("topicDetails", {}).get("topicCategories", [])]
@@ -841,7 +881,8 @@ def full_scan(yt: YouTube, cfg: dict, langs: list[str], genres: list[str], crit:
     return evaluate(yt, cfg, cands, crit, genres, progress)
 
 
-def keyword_queries(cfg: dict, keywords: list[str], langs: list[str], translate_kw: bool) -> list[tuple[str, str]]:
+def keyword_queries(cfg: dict, keywords: list[str], langs: list[str], translate_kw: bool,
+                    source: str | None = None) -> list[tuple[str, str]]:
     """Lista (busca, idioma). Com tradução, cada palavra-chave vira uma busca por idioma, no idioma dele."""
     out, seen = [], set()
     for kw in keywords:
@@ -849,7 +890,7 @@ def keyword_queries(cfg: dict, keywords: list[str], langs: list[str], translate_
         if not kw:
             continue
         for l in langs:
-            q = translate_query(cfg, kw, l) if translate_kw else kw
+            q = translate_query(cfg, kw, l, source) if translate_kw else kw
             if (q.lower(), l) not in seen:
                 seen.add((q.lower(), l))
                 out.append((q, l))
@@ -1048,6 +1089,7 @@ def profile_channel(yt: YouTube, cfg: dict, cid: str) -> dict:
         "subscribers": subs, "hidden_subs": hidden, "views": views, "videos": nvid,
         "avg_views": round(views / max(nvid, 1)),
         "recent_avg": round(statistics.mean(v["views"] for v in vids)), "analyzed": len(vids),
+        "titles": [v["title"] for v in vids],
         "created": sn["publishedAt"][:10],
         "shorts_share": round(sum(1 for d in durs if 0 < d <= 180) / len(vids), 2),
         "avg_minutes": round(statistics.mean(durs) / 60, 1) if durs else 0,
@@ -1072,29 +1114,183 @@ def _short_query(cfg: dict, q: str, max_words: int = 5) -> str:
     return " ".join(dict.fromkeys(words))            # sem palavras repetidas ('lofi lofi hip hop')
 
 
+_STOP = set("""
+a o os as um uma uns umas de da do das dos em no na nos nas por para com sem sob sobre que se ao aos mais menos muito
+mas como foi era ser tem teve seu sua seus suas ele ela eles elas isso esse essa este esta aquele quando onde porque
+el la los las un una unos unas del al en con sin por para que se su sus lo le les mas como fue era ser tiene tuvo
+este esta ese esa pero muy todo toda todos
+the an and or of to in on at for with without by from as is was were be been has had have that this these those
+it its his her their they he she we you your who whom what when where why how not but all one out up
+video videos official full part parte episode episodio live mix
+""".split())
+
+
+def topic_terms(cfg: dict, ref: dict, n: int = 4) -> list[str]:
+    """Palavras que definem o assunto do canal: as mais repetidas nos títulos dos vídeos (e siglas como FBI).
+    Usadas para aprovar só canais cujos títulos falam do mesmo assunto. Vazio para música (o gênero já filtra)."""
+    if "musica" in ref.get("genres", []):
+        return []
+    titles = ref.get("titles") or [v["title"] for v in ref.get("top_videos", [])]
+    count: Counter = Counter()
+    for t in titles:
+        words = {_norm(w) for w in re.findall(r"[^\W\d_]+", clean_title(t)) if len(w) >= 4 or (len(w) == 3 and w.isupper())}
+        count.update(w for w in words if w not in _STOP)       # siglas de 3 letras (FBI, CIA) também contam
+    need = max(2, math.ceil(len(titles) * 0.2))
+    out = [w for w, c in count.most_common() if c >= need]
+    return out[:n]
+
+
+def title_pattern(ref: dict) -> str:
+    """Abertura que se repete nos títulos do canal (ex.: 'o hacker que' em 'O Hacker que…').
+    Como frase de busca, acha vídeos com a mesma fórmula de título sem puxar canais gigantes do assunto."""
+    titles = ref.get("titles") or []
+    need = max(2, math.ceil(len(titles) * 0.3))
+    for k in (3, 2):
+        count = Counter(" ".join(w[:k]) for w in (clean_title(t).lower().split() for t in titles) if len(w) >= k)
+        for pat, c in count.most_common():
+            if c >= need and not all(x in _STOP for x in pat.split()):
+                return pat
+    return ""
+
+
 def link_plan(cfg: dict, ref: dict, langs: list[str], n: int = 3) -> dict:
     """Buscas sugeridas para achar canais parecidos com `ref` (títulos dos vídeos mais vistos → tema + estilo),
-    encurtadas para no máx. 5 palavras."""
+    encurtadas para no máx. 8 palavras, e as palavras do assunto (`terms`) que os títulos dos candidatos devem ter."""
     plan = similar_plan({**cfg, "similar_queries": n}, ref, langs)
-    base = list(dict.fromkeys(_short_query(cfg, q) for q in plan["base"] if q.strip()))
-    return {**plan, "base": base}
+    base = list(dict.fromkeys(_short_query(cfg, q, 8) for q in plan["base"] if q.strip()))
+    terms = topic_terms(cfg, ref)
+    if terms:
+        # buscas curtas de palavras-chave (ex.: "hacker nasa") trazem ~40 canais; frases longas de título quase
+        # não trazem nada. Vão primeiro; a 1ª busca por título completa a lista.
+        kw = [terms[0]] if len(terms) == 1 else [f"{terms[0]} {t}" for t in terms[1:3]]
+        pat = title_pattern(ref)
+        base = list(dict.fromkeys(([pat] if pat else []) + kw + base[:1]))[:n]
+    return {**plan, "base": base, "terms": terms}
+
+
+def _validate_near(yt: YouTube, cfg: dict, near: list[dict], terms: list[str], pct: float, limit: int = 6) -> list[dict]:
+    """Confere se os quase aprovados falam do mesmo assunto (~3 unidades cada) e anexa os vídeos mais vistos."""
+    out = []
+    for n in near[:limit * 2]:
+        if len(out) >= limit:
+            break
+        try:
+            prof = profile_channel(yt, cfg, n["id"])
+        except ApiError:
+            continue
+        if terms:
+            tm = title_match(prof["titles"], terms)
+            if tm["hits"] < max(1, math.ceil(len(prof["titles"]) * pct / 100)):
+                continue
+            n = {**n, "title_match": tm}
+        out.append({**n, "lang": prof["lang"], "top_videos": prof["top_videos"]})
+    return out
+
+
+def _rank_near(near: list[dict], exclude: set[str], limit: int = 12) -> list[dict]:
+    """Quase aprovados sem repetição, os achados por mais buscas primeiro (mais ligados ao nicho)."""
+    best: dict[str, dict] = {}
+    for n in near:
+        if n["id"] in exclude:
+            continue
+        old = best.get(n["id"])
+        if old is None or n["hits"] > old["hits"]:
+            best[n["id"]] = n
+    return sorted(best.values(), key=lambda n: (-n["hits"], -n["avg_views"]))[:limit]
+
+
+def snowball_queries(cfg: dict, seeds: list[dict], used: set[tuple[str, str]], langs: list[str],
+                     per_seed: int = 2, limit: int = 4) -> list[tuple[str, str]]:
+    """"Seguir pistas": os títulos mais vistos de canais que já deram certo viram novas buscas, no idioma
+    do próprio canal (sem traduzir) — acha canais que a busca original não alcançou."""
+    out: list[tuple[str, str]] = []
+    for sd in seeds:
+        lang = sd.get("lang") if sd.get("lang") in cfg["languages"] else (langs[0] if langs else "en")
+        if langs and lang not in langs:
+            lang = langs[0]
+        n = 0
+        for v in sd.get("top_videos", []):
+            q = _short_query(cfg, clean_title(v["title"]).lower(), 7)
+            key = (q.lower(), lang)
+            if len(q.split()) >= 2 and key not in used and key not in out:
+                out.append(key)
+                n += 1
+            if n >= per_seed:
+                break
+        if len(out) >= limit:
+            break
+    return out[:limit]
 
 
 def similar_from_link(yt: YouTube, cfg: dict, ref: dict, base_queries: list[str], langs: list[str], crit: dict,
                       same_genre: bool = True, duration: str | None = None,
-                      progress=None) -> tuple[list[dict], dict, dict]:
-    """Busca canais parecidos com o canal de referência, aplicando os critérios do Radar (novos e virais)."""
-    queries = keyword_queries(cfg, base_queries, langs, True)
+                      progress=None, snowball: int = 0, terms: list[str] | None = None) -> tuple[list[dict], dict, dict]:
+    """Busca canais parecidos com o canal de referência, aplicando os critérios do Radar (novos e virais).
+
+    snowball: nº de buscas extras (100 unidades cada) feitas a partir dos títulos dos melhores canais achados
+    (e dos quase aprovados) — "seguir pistas". Também devolve em extra["near"] os canais que quase passaram.
+    terms: palavras do assunto; só passam canais cujos títulos (≥ crit["min_title_pct"]%) contêm alguma delas, já
+    traduzidas para cada idioma buscado. Sem `terms`, vale só o gênero.
+    """
+    queries = keyword_queries(cfg, base_queries, langs, True, ref.get("lang") or None)
     plan = [{"q": q, "lang": l, "days": crit["days"], "duration": duration, "genre": None} for q, l in queries]
     real_genres = [g for g in ref.get("genres", []) if g in cfg["categories"]]
     genres = real_genres if same_genre and real_genres else None
-    res, funnel = radar(yt, cfg, plan, crit, genres, duration, any_genre=not genres, progress=progress)
+    near: list[dict] = []
+    cands: dict[str, set] = {}
+    title_terms = None
+    if terms:
+        title_terms = list(dict.fromkeys(
+            [t.strip() for t in terms if t.strip()]
+            + [translate_query(cfg, t, l, ref.get("lang") or None) for t in terms if t.strip() for l in langs]))
+    pct = crit.get("min_title_pct", 0)
+    for i, p in enumerate(plan, 1):
+        if progress:
+            progress(f"Busca {i}/{len(plan)}: “{p['q']}” ({p['lang']}, últimos {p['days']} dias)")
+        _merge(cands, search(yt, cfg, p["q"], p["lang"], p["days"], "video", duration))
+    if progress:
+        progress(f"{len(cands)} canais encontrados. Calculando pontuação viral…")
+    res, funnel = evaluate(yt, cfg, cands, crit, genres, progress, any_genre=not genres, near=near,
+                           title_terms=title_terms)
+    if progress:
+        progress("Conferindo os que quase passaram…")
+    near_ok = _validate_near(yt, cfg, _rank_near(near, {ref["id"]} | {r["id"] for r in res}, 30), title_terms or [], pct)
+    extra_q: list[tuple[str, str]] = []
+    if snowball > 0:
+        seeds = [r for r in res if r["id"] != ref["id"]][:3] + near_ok[:2]
+        extra_q = snowball_queries(cfg, seeds, set(queries), langs, limit=snowball)
+        if extra_q:
+            cands2: dict[str, set] = {}
+            for i, (q, l) in enumerate(extra_q, 1):
+                if progress:
+                    progress(f"Seguindo pistas {i}/{len(extra_q)}: “{q}” ({l})")
+                _merge(cands2, search(yt, cfg, q, l, crit["days"], "video", duration))
+            cands2 = {c: v for c, v in cands2.items() if c not in cands}
+            if progress:
+                progress(f"{len(cands2)} canais novos nas pistas. Avaliando…")
+            res2, f2, near2 = [], None, []
+            if cands2:
+                res2, f2 = evaluate(yt, cfg, cands2, crit, genres, progress, any_genre=not genres, near=near2,
+                                    title_terms=title_terms)
+                near_ok += _validate_near(yt, cfg, _rank_near(near2, {ref["id"]} | {n["id"] for n in near_ok}, 20),
+                                          title_terms or [], pct, 4)
+            have = {r["id"] for r in res}
+            res += [r for r in res2 if r["id"] not in have]
+            res.sort(key=lambda r: r["viral"], reverse=True)
+            if f2:
+                for k, v in f2.items():
+                    funnel[k] = funnel.get(k, 0) + v if k != "aprovados" else len(res)
+            funnel["aprovados"] = len(res)
     if any(r["id"] == ref["id"] for r in res):        # o próprio canal de referência não conta
         res = [r for r in res if r["id"] != ref["id"]]
         funnel["aprovados"] = len(res)
     for r in res:
         r["similar_to"] = [ref["title"]]
-    return res, funnel, {"queries": [{"q": q, "lang": l} for q, l in queries]}
+    funnel = {k: funnel[k] for k in FUNNEL_ORDER if funnel.get(k) or k in ("encontrados", "aprovados")}
+    return res, funnel, {"queries": [{"q": q, "lang": l} for q, l in queries],
+                         "snowball": [{"q": q, "lang": l} for q, l in extra_q],
+                         "terms": title_terms or [],
+                         "near": [n for n in near_ok if n["id"] not in {r["id"] for r in res}]}
 
 
 def refresh_channels(yt: YouTube, cfg: dict, ids: list[str], progress=None) -> tuple[list[dict], dict]:

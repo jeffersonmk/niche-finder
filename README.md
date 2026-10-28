@@ -255,9 +255,21 @@ Para canais com inscritos ocultos, os fatores que dependem de inscritos valem 0,
 
 1. **Lê o link:** aceita `youtube.com/@nome`, `/channel/UC…`, `/c/nome`, `/user/nome`, só `@nome`, ou o link de um vídeo do canal (`watch?v=`, `youtu.be/`, `/shorts/`, `music.youtube.com`). Links de outros sites ou de páginas de busca são recusados com uma mensagem clara.
 2. **Analisa o canal de referência (~3 unidades):** idioma, gênero, formato (Shorts/longos), inscritos e os 3 vídeos mais vistos. O canal de referência pode ser grande e antigo; os filtros valem só para os resultados.
-3. **Sugere buscas:** usa a mesma lógica dos "parecidos em outros idiomas" (tema + estilo dos títulos mais vistos), encurtadas para no máximo 5 palavras e sem palavras repetidas (*24/7 halloween ambience spooky lofi to get chills to lofi hip hop beats* → *lofi hip hop beats*). As sugestões são editáveis antes de gastar cota.
-4. **Busca e ranqueia:** procura vídeos do período nos idiomas marcados, com a mesma duração do canal (se escolhido), aplica os critérios do **Radar viral** (idade, inscritos, nº de vídeos, média de views) e, por padrão, só aceita canais do **mesmo gênero**. O próprio canal de referência nunca aparece nos resultados.
-5. Os aprovados são salvos com a etiqueta **≈ nome do canal de referência** e ordenados do mais viral ao menos viral.
+3. **Sugere buscas:**
+   - **Canais de música:** tema + estilo dos títulos mais vistos, encurtados para no máximo 5 palavras e sem palavras repetidas (*24/7 halloween ambience spooky lofi to get chills to lofi hip hop beats* → *lofi hip hop beats*).
+   - **Outros assuntos (documentário, curiosidades…):** buscas curtas montadas com as **palavras do assunto** (as mais repetidas nos títulos, ex.: *hacker, fbi*) e com a **abertura que se repete nos títulos** (ex.: *O hacker que…*). Frases longas de título quase não trazem resultado na busca do YouTube; buscas curtas trazem ~40 canais.
+   - As sugestões são traduzidas **a partir do idioma do canal de referência** (o app sabe que o GusEXE é em português, em vez de adivinhar) e são editáveis antes de gastar cota.
+4. **Palavras nos títulos:** a caixa "Palavras que devem aparecer nos títulos" vem preenchida com as palavras do assunto (vazia para música, onde o gênero já filtra). Só passa canal em que pelo menos 30% dos títulos tenham alguma delas (já traduzidas para cada idioma buscado). Apague para filtrar só por gênero.
+5. **Busca e ranqueia:** procura vídeos do período nos idiomas marcados, com a mesma duração do canal (se escolhido), aplica os critérios do **Radar viral** e, por padrão, só aceita canais do **mesmo gênero**. O próprio canal de referência nunca aparece nos resultados.
+6. Os aprovados são salvos com a etiqueta **≈ nome do canal de referência** e ordenados do mais viral ao menos viral.
+
+**Mais resultados quando o nicho é pequeno:**
+
+- **🔭 Busca ampla:** troca os critérios do Radar pelo bloco `radar_wide` do `config.json` (1º vídeo há até 180 dias, até 100 vídeos, média mínima de 1.500 views, nota mín. 20). Canais de 4 a 6 meses já com dezenas de milhares de views costumam aparecer só aqui.
+- **🧭 Seguir pistas (+4 buscas, ~400 unidades):** usa os títulos mais vistos dos melhores canais achados como novas buscas, no idioma de cada canal, e avalia só os canais ainda não vistos.
+- **Quase passaram:** lista (sem custo extra de busca, ~3 unidades por canal conferido) os canais do mesmo assunto que ficaram a um passo de passar — por exemplo, 60 vídeos quando o limite é 40 — com o motivo. Serve para saber o que afrouxar.
+
+Pelo terminal: `python3 server.py --like LINK --langs es,en --wide --snowball 4 [--terms "hacker,fbi"]`.
 
 Em nichos onde os canais postam muito (lofi, jazz relaxante), o filtro que mais elimina é "muitos vídeos": aumente **Vídeos até** na aba Radar (os critérios são compartilhados).
 
@@ -268,7 +280,7 @@ Em nichos onde os canais postam muito (lofi, jazz relaxante), o filtro que mais 
 3. Traduz cada busca para os idiomas marcados na tela, **sem traduzir os termos de `protected_terms`** (*dnb*, *jungle*, *breakcore*, *lofi*, *mix*, *ps2*…). Assim *atmospheric jungle dnb mix* vira *atmosférico jungle dnb mix*, e não "mix de dnb da selva".
 4. Busca vídeos do período com a mesma duração do canal (mixes longos → só vídeos longos) e mantém os canais aprovados nos filtros e do **mesmo gênero**.
 
-A tradução usa o serviço público do Google Tradutor (com o MyMemory como reserva). Só o texto das buscas é enviado, nunca a chave. Se a tradução falhar, a busca segue com o texto original.
+A tradução usa o serviço público do Google Tradutor, com reservas (outra porta do Google e o MyMemory). Só o texto das buscas é enviado, nunca a chave. Respostas de erro ou de baixa confiança do MyMemory são descartadas (nunca viram "tradução" nem entram no cache). Se tudo falhar, a busca segue com o texto original.
 
 ## Configuração (`config.json`)
 
@@ -295,6 +307,7 @@ A tradução usa o serviço público do Google Tradutor (com o MyMemory como res
 | `scan_languages` | `["pt", "en"]` | Idiomas padrão (também dá para mudar na interface). |
 | `languages` | pt, en, es, ja, fr, de | Idiomas disponíveis: nome, `regionCode` e `relevanceLanguage` usados na busca. |
 | `protected_terms` | dnb, jungle, lofi, mix… | Termos que nunca são traduzidos (nomes de gêneros musicais e afins). |
+| `untranslated_names` | anonymous, fbi, cia, nasa… | Nomes próprios que nunca são traduzidos nas buscas (ex.: *Anonymous* não vira *anónimo*). Acrescente os do seu nicho. |
 | `categories` | 4 gêneros | Para cada gênero: nome, IDs de categoria do YouTube, tópicos, conceitos da varredura, palavras-chave e duração dos vídeos buscados (`video_duration`). |
 
 ### Exemplos
@@ -343,7 +356,7 @@ Custo por operação com a configuração padrão:
 | Operação | Cálculo | Total |
 |---|---|---|
 | Busca por palavras-chave | palavras-chave × idiomas × 100 | 3 palavras em PT + EN = ~600 + detalhes |
-| Parecidos com um canal (link) | ~3 para analisar + buscas × idiomas × 100 | 1 busca em EN = ~100 + detalhes |
+| Parecidos com um canal (link) | ~3 para analisar + buscas × idiomas × 100 (+400 com "seguir pistas") | 3 buscas em ES + EN = ~600 + detalhes |
 | Parecidos em outros idiomas | até 2 buscas × idiomas marcados × 100 | PT + EN = ~400 + detalhes |
 | Varredura (PT + EN) | conceitos do config × 2 idiomas × 100 | ~3.000 + detalhes |
 | Varredura no modo `both` | o dobro (vídeos + canais) | ~6.000 + detalhes |

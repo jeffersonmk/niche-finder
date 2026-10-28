@@ -62,7 +62,7 @@ def n_videos(c: str) -> int:
     return 60 if c == "UCl" else len(CHANNELS[c][7]) * 6
 
 
-def fake_translate(text: str, target: str) -> tuple[str, str]:
+def fake_translate(text: str, target: str, source: str | None = None) -> tuple[str, str]:
     """Tradutor de mentira: marca o idioma no texto (o texto de origem é sempre 'inglês')."""
     return f"{text} [{target}]", "en"
 
@@ -462,6 +462,95 @@ class SimilarFromLinkTest(unittest.TestCase):
         self.assertEqual(funnel["aprovados"], len(res))
 
 
+    def test_near_misses_are_reported_for_free(self):
+        ref = core.profile_channel(self.yt, self.cfg, "UCa")
+        crit = core.criteria(self.cfg, None, "radar")
+        res, funnel, extra = core.similar_from_link(self.yt, self.cfg, ref, ["dnb mix"], ["en"], crit, True, None)
+        near = {n["title"]: n for n in extra["near"]}
+        self.assertIn("Média Baixa", near)                       # 60 vídeos contra o limite de 40: quase passou
+        self.assertEqual(near["Média Baixa"]["reason"], "muitos vídeos")
+        self.assertNotIn("Neon Jungle", near)                    # o canal de referência nunca aparece
+        self.assertFalse({n["title"] for n in extra["near"]} & {r["title"] for r in res})
+        self.assertEqual(extra["snowball"], [])
+
+    def test_snowball_follows_clues_from_good_channels(self):
+        real_search, calls = core.search, []
+
+        def fake_search(yt, cfg, q, lang, days, mode="video", duration=None):
+            calls.append(q)
+            if q == "dnb mix":                                   # só a busca "seguindo pistas" acha o Pequenino
+                return {"UCj": {(q, lang)}}
+            return {c: {(q, lang)} for c in BY_LANG[lang] if c != "UCj"}
+        core.search = fake_search
+        try:
+            ref = core.profile_channel(self.yt, self.cfg, "UCa")
+            crit = core.criteria(self.cfg, None, "radar")
+            res0, _, _ = core.similar_from_link(self.yt, self.cfg, ref, ["atmospheric jungle dnb mix"], ["en"], crit, True, None)
+            self.assertNotIn("Pequenino", [r["title"] for r in res0])
+            res, funnel, extra = core.similar_from_link(self.yt, self.cfg, ref, ["atmospheric jungle dnb mix"], ["en"], crit,
+                                                        True, None, snowball=2)
+        finally:
+            core.search = real_search
+        self.assertIn("dnb mix", [q["q"] for q in extra["snowball"]])      # veio do quase aprovado "Média Baixa"
+        self.assertIn("dnb mix", calls)
+        self.assertIn("Pequenino", [r["title"] for r in res])
+        self.assertEqual(funnel["aprovados"], len(res))
+        self.assertEqual([r["viral"] for r in res], sorted((r["viral"] for r in res), reverse=True))
+
+    def test_translation_uses_source_hint_and_ignores_poisoned_cache(self):
+        seen = []
+        real = core._translator
+        core._translator = lambda text, target, source=None: (seen.append((text, target, source)) or (f"{text} [{target}]", source or "en"))
+        try:
+            self.assertEqual(core.translate_query(self.cfg, "o hacker mais caçado", "es", "pt"), "o hacker mais caçado [es]")
+            self.assertEqual(seen[-1][2], "pt")
+            self.assertEqual(core.translate_query(self.cfg, "o hacker mais caçado", "pt", "pt"), "o hacker mais caçado")   # mesma língua: não traduz
+            core.CACHE_DIR.mkdir(exist_ok=True)
+            ck = core.hashlib.sha1(core.json.dumps(["texto novo", "en"]).encode()).hexdigest()
+            (core.CACHE_DIR / f"translate_{ck}.json").write_text('["PLEASE SELECT TWO DISTINCT LANGUAGES", "en"]')
+            self.assertEqual(core.translate("texto novo", "en")[0], "texto novo [en]")
+        finally:
+            core._translator = real
+
+
+    def test_topic_terms_and_title_pattern(self):
+        ref = {"genres": ["documentario"], "titles": [
+            "O HACKER que teve acesso a DOCUMENTOS SECRETOS", "O Hacker do Anonymous que trabalhava para o FBI!",
+            "O HACKER QUE MAIS DEU TRABALHO PARA O FBI! (invadiu grandes empresas)", "O Hacker de 15 Anos que Invadiu a NASA e o FBI",
+            "O Homem que Encontrou um Bug de DINHEIRO INFINITO", "Os Hackers ADOLESCENTES que derrubaram sites"]}
+        terms = core.topic_terms(self.cfg, ref)
+        self.assertEqual(terms[0], "hacker")
+        self.assertNotIn("que", terms)
+        self.assertIn("fbi", terms)
+        self.assertEqual(core.title_pattern(ref), "o hacker que")
+        self.assertEqual(core.topic_terms(self.cfg, {**ref, "genres": ["musica"]}), [])      # música: o gênero já filtra
+        plan = core.link_plan(self.cfg, {**ref, "lang": "pt", "top_videos": [{"title": t, "views": 1} for t in ref["titles"][:3]]}, ["es"])
+        self.assertEqual(plan["base"][0], "o hacker que")
+        self.assertTrue(all(len(q.split()) <= 8 for q in plan["base"]))
+
+    def test_terms_filter_candidates_by_subject(self):
+        ref = core.profile_channel(self.yt, self.cfg, "UCa")
+        crit = core.criteria(self.cfg, {"min_viral": 0}, "radar")
+        res, funnel, extra = core.similar_from_link(self.yt, self.cfg, ref, ["jungle"], ["en"], crit, False, None,
+                                                    terms=["dnb mix"])
+        self.assertEqual([r["title"] for r in res], [])                  # só o ref tem "dnb mix" em 30%+ dos títulos
+        self.assertGreaterEqual(funnel["títulos sem as palavras-chave"], 1)
+        self.assertIn("dnb mix", extra["terms"])
+
+
+    def test_proper_names_are_not_translated(self):
+        seen = []
+        real = core._translator
+        core._translator = lambda text, target, source=None: (seen.append(text) or (f"<{text}>", "pt"))
+        try:
+            out = core.translate_query(self.cfg, "o hacker do Anonymous que trabalhava para o FBI", "es", "pt")
+        finally:
+            core._translator = real
+        self.assertIn("Anonymous", out)
+        self.assertIn("FBI", out)
+        self.assertFalse(any("Anonymous" in t or "FBI" in t for t in seen))      # nem chegam ao tradutor
+
+
 class SecurityTest(unittest.TestCase):
     """A chave nunca pode sair do arquivo .env: nem para o navegador, nem para cache, nem para mensagens de erro."""
 
@@ -578,7 +667,8 @@ class SecurityTest(unittest.TestCase):
         self.assertEqual(code, 400)
         self.assertIn("link", json.loads(body)["error"])
         code, body = self.req("/api/similar_link", {"channel": "UCa", "queries": r["queries"], "langs": ["pt"],
-                                                    "duration": r["duration"]})
+                                                    "duration": r["duration"], "wide": True, "snowball": True,
+                                                    "terms": ""})
         self.assertEqual(code, 200, body)
         import time
         jid = json.loads(body)["job"]
@@ -590,6 +680,8 @@ class SecurityTest(unittest.TestCase):
         j = json.loads(body)
         self.assertEqual(j["status"], "done", body)
         self.assertIn("Selva Atmosférica", [x["title"] for x in j["results"]])
+        self.assertIn("snowball", j["extra"])
+        self.assertIn("near", j["extra"])
         self.assertNotIn(self.FAKE_KEY, body)
 
     def test_frontend_has_no_key_or_google_api_calls(self):

@@ -320,6 +320,7 @@ async function similar(c) {
     merge(j.results); buildControls(); render();
     $("#similarTitle").textContent = `Parecidos com “${c.title}” (${j.results.length})`;
     $("#similarQueries").innerHTML = planHtml(j.extra.queries);
+    $("#similarNear").innerHTML = "";
     $("#similarGrid").replaceChildren(...j.results.map(card));
     if (!j.results.length) $("#similarGrid").innerHTML = `<p class="muted">Nenhum canal parecido passou nos critérios. Veja o funil acima.</p>`;
     $("#similarPanel").hidden = false; $("#similarPanel").scrollIntoView({ behavior: "smooth" });
@@ -431,6 +432,9 @@ function showLinkRef(r) {
     <label class="field">Buscas sugeridas (tiradas dos títulos mais vistos — edite à vontade, separe com vírgula)
       <input id="linkQ" type="text" value="${esc(r.queries.join(", "))}">
     </label>
+    <label class="field">Palavras que devem aparecer nos títulos dos vídeos (separe com vírgula; vazio = só o gênero conta)
+      <input id="linkTerms" type="text" value="${esc((r.terms || []).join(", "))}" placeholder="ex.: hacker, fbi">
+    </label>
     <div class="opts">
       <span class="opt">Buscar em</span><div class="chips" id="linkLangs"></div>
     </div>
@@ -442,7 +446,11 @@ function showLinkRef(r) {
         </select></label>
       <label class="opt" title="${realGenres.length ? "Só aprova canais do mesmo gênero que o canal de referência" : "O canal não se encaixa nos 4 gêneros do config — qualquer gênero será aceito"}">
         <input type="checkbox" id="linkSame" ${realGenres.length ? "checked" : "disabled"}> só ${realGenres.length ? esc(realGenres.map(genreName).join("/")) : "mesmo gênero"}</label>
-      <span class="muted small">Critérios do Radar (idade, inscritos, vídeos, média, pontuação mín.) valem aqui também.</span>
+      <label class="opt" title="Usa o bloco radar_wide do config.json: 1º vídeo há até 180 dias, até 100 vídeos, média mínima de 1.500 views. Ignora os campos do Radar.">
+        <input type="checkbox" id="linkWide"> 🔭 busca ampla</label>
+      <label class="opt" title="Depois da busca, usa os títulos mais vistos dos melhores canais achados (e dos que quase passaram) como novas buscas. +4 buscas.">
+        <input type="checkbox" id="linkSnow"> 🧭 seguir pistas (+4 buscas)</label>
+      <span class="muted small">Sem “busca ampla”, valem os critérios do Radar (idade, inscritos, vídeos, média, pontuação mín.).</span>
     </div>
     <div class="kw-row"><span class="muted small grow" id="linkCost"></span>
       <button class="btn primary hot" id="linkGo" type="button">🔎 Buscar canais parecidos</button></div>`;
@@ -450,9 +458,11 @@ function showLinkRef(r) {
   const draw = () => {
     langChips($("#linkLangs"), S.kwLangs, l => { S.kwLangs = toggle(S.kwLangs, l); store("kw-langs", S.kwLangs); draw(); buildControls(); });
     const n = (($("#linkQ").value.match(/[^,]+/g) || []).filter(s => s.trim()).length) * S.kwLangs.length;
-    $("#linkCost").textContent = `${n} buscas · ~${full(n * 100)} unidades + ~3 por canal avaliado · disponível hoje: ${full(S.quota.remaining)}`;
+    const tot = n + ($("#linkSnow").checked ? 4 : 0);
+    $("#linkCost").textContent = `${tot} buscas · ~${full(tot * 100)} unidades + ~3 por canal avaliado · disponível hoje: ${full(S.quota.remaining)}`;
   };
   $("#linkQ").oninput = draw;
+  $("#linkSnow").onchange = draw;
   draw();
   $("#linkGo").onclick = similarFromLink;
 }
@@ -462,16 +472,28 @@ async function similarFromLink() {
   const queries = $("#linkQ").value.trim();
   if (!queries) return $("#linkQ").focus();
   const body = { channel: c.id, queries, langs: S.kwLangs, duration: $("#linkDur").value,
-                 same_genre: $("#linkSame").checked, criteria: radarCrit() };
+                 same_genre: $("#linkSame").checked, criteria: radarCrit(), terms: $("#linkTerms").value,
+                 wide: $("#linkWide").checked, snowball: $("#linkSnow").checked };
   try {
     const j = await runJob("/api/similar_link", body, `Procurando canais parecidos com “${c.title}”`);
     merge(j.results); buildControls(); render();
     $("#similarTitle").textContent = `Parecidos com “${c.title}” (${j.results.length})`;
-    $("#similarQueries").innerHTML = planHtml(j.extra.queries);
+    $("#similarQueries").innerHTML = planHtml(j.extra.queries)
+      + (j.extra.snowball && j.extra.snowball.length ? `<span class="muted small pq-sep">🧭 pistas:</span>` + planHtml(j.extra.snowball) : "");
+    $("#similarNear").innerHTML = nearHtml(j.extra.near || []);
     $("#similarGrid").replaceChildren(...j.results.map(card));
     if (!j.results.length) $("#similarGrid").innerHTML = `<p class="muted">Nenhum canal novo e viral parecido passou nos critérios. Veja o funil acima — dá para afrouxar os critérios na aba Radar (ex.: 60 dias, mais vídeos) ou mudar as buscas.</p>`;
     $("#similarPanel").hidden = false; $("#similarPanel").scrollIntoView({ behavior: "smooth" });
   } catch (e) { banner(e.message, true); }
+}
+
+function nearHtml(near) {
+  if (!near.length) return "";
+  return `<h3 class="near-title">Quase passaram <span class="muted small">— falam do mesmo assunto, mas ficaram fora de um critério</span></h3>
+    <ul class="near-list">${near.map(n => `<li>
+      <a href="${esc(n.url)}" target="_blank" rel="noopener">${esc(n.title)}</a>
+      <span class="muted small">${FLAG[n.lang] || ""} ${n.subscribers ? fmt(n.subscribers) + " inscritos" : "inscritos ocultos"} · ${n.videos} vídeos · média ${fmt(n.avg_views)} views</span>
+      <span class="tag-miss">${esc(n.reason)}</span></li>`).join("")}</ul>`;
 }
 
 /* ---------------- configurações ---------------- */

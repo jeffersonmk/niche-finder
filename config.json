@@ -17,6 +17,15 @@
     "min_viral": 35,
     "min_title_pct": 30
   },
+  "radar_wide": {
+    "days": 180,
+    "max_subscribers": 100000,
+    "max_videos": 100,
+    "min_avg_views": 1500,
+    "min_views_per_sub": 5,
+    "min_viral": 20,
+    "min_title_pct": 30
+  },
   "viral_weights": {
     "views": 0.1,
     "avg_views": 0.2,
@@ -67,6 +76,16 @@
       "relevanceLanguage": "de"
     }
   },
+  "untranslated_names": [
+    "anonymous",
+    "lulzsec",
+    "wikileaks",
+    "fbi",
+    "cia",
+    "nasa",
+    "darknet",
+    "dark web"
+  ],
   "protected_terms": [
     "drum and bass",
     "drum & bass",

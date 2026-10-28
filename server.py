@@ -250,7 +250,7 @@ class Handler(BaseHTTPRequestHandler):
                 cid = core.resolve_channel(client, b.get("url", ""))
                 ref = core.profile_channel(client, cfg, cid)
                 plan = core.link_plan(cfg, ref, langs)
-                return self._json({"channel": ref, "queries": plan["base"], "duration": plan["duration"],
+                return self._json({"channel": ref, "queries": plan["base"], "terms": plan["terms"], "duration": plan["duration"],
                                    "used": client.used, "quota": core.quota_status()})
 
             if u.path == "/api/similar_link":
@@ -259,13 +259,17 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json({"error": "Digite ao menos uma busca."}, 400)
                 client = yt()
                 ref = core.profile_channel(client, cfg, b.get("channel", ""))   # vem do cache: 0 unidades
-                rcrit = core.criteria(cfg, b.get("criteria"), "radar")
+                wide = bool(b.get("wide"))
+                # busca ampla: preset `radar_wide` do config.json (mais dias e mais vídeos), ignora os campos do Radar
+                rcrit = core.criteria(cfg, None if wide else b.get("criteria"), "radar_wide" if wide else "radar")
                 same = bool(b.get("same_genre", True))
                 duration = b.get("duration") or None
+                snow = 4 if b.get("snowball") else 0
+                terms = _keywords(b.get("terms"))
 
                 def fn(progress):
                     res, funnel, extra = core.similar_from_link(client, cfg, ref, queries, langs, rcrit, same,
-                                                                duration, progress)
+                                                                duration, progress, snowball=snow, terms=terms)
                     core.save_results(res, cfg)
                     return res, funnel, extra
                 return self._json({"job": start_job("similar_link", fn)})
@@ -358,26 +362,38 @@ if __name__ == "__main__":
     ap.add_argument("--days", type=int, help="idade máxima do 1º vídeo, em dias")
     ap.add_argument("--radar", action="store_true", help="Radar viral: canais novos explodindo com --keywords nos títulos")
     ap.add_argument("--like", metavar="LINK", help="canais novos e virais parecidos com o canal deste link")
+    ap.add_argument("--terms", help="com --like: palavras que devem aparecer nos títulos (padrão: automáticas, ex.: hacker,fbi)")
+    ap.add_argument("--wide", action="store_true", help="com --like/--radar: critérios amplos (bloco radar_wide do config.json)")
+    ap.add_argument("--snowball", type=int, default=0, metavar="N",
+                    help="com --like: N buscas extras (100 unidades cada) a partir dos melhores canais achados")
     a = ap.parse_args()
     if a.like:
         cfg = core.load_config()
-        crit = core.criteria(cfg, {"days": a.days}, "radar")
+        crit = core.criteria(cfg, {"days": a.days}, "radar_wide" if a.wide else "radar")
         langs = a.langs.split(",") if a.langs else cfg["scan_languages"]
         client = yt()
         ref = core.profile_channel(client, cfg, core.resolve_channel(client, a.like))
         base = _keywords(a.keywords) or core.link_plan(cfg, ref, langs)["base"]
-        print(f"Referência: {ref['title']} [{ref['lang']}] · {', '.join(ref['genres'])} · buscas: {base}")
-        res, funnel, _ = core.similar_from_link(client, cfg, ref, base, langs, crit, True,
-                                                core.link_plan(cfg, ref, langs)["duration"], print)
+        terms = _keywords(a.terms) if a.terms is not None else core.link_plan(cfg, ref, langs)["terms"]
+        print(f"Referência: {ref['title']} [{ref['lang']}] · {', '.join(ref['genres'])} · buscas: {base} · palavras nos títulos: {terms}")
+        res, funnel, extra = core.similar_from_link(client, cfg, ref, base, langs, crit, True,
+                                                    core.link_plan(cfg, ref, langs)["duration"], print, snowball=a.snowball, terms=terms)
         core.save_results(res, cfg)
         print("\nFunil: " + " · ".join(f"{k}: {v}" for k, v in funnel.items()))
+        if extra["snowball"]:
+            print("Pistas seguidas: " + ", ".join(f"“{q['q']}” ({q['lang']})" for q in extra["snowball"]))
         for r in res:
             print(f"  🔥{r['viral']:5}  {r['title']}  [{r['lang']}]  {r['subscribers']:,} insc. · {r['videos']} vídeos "
                   f"· média {r['avg_views']:,} · {round(r['age_days'])} dias  {r['url']}")
+        if extra["near"]:
+            print("\nQuase passaram:")
+            for n in extra["near"]:
+                print(f"  ~ {n['title']}  {n['subscribers']:,} insc. · {n['videos']} vídeos · média {n['avg_views']:,} "
+                      f"· {n['reason']}  {n['url']}")
         print(f"Cota usada: {client.used}")
     elif a.radar:
         cfg = core.load_config()
-        crit = core.criteria(cfg, {"days": a.days}, "radar")
+        crit = core.criteria(cfg, {"days": a.days}, "radar_wide" if a.wide else "radar")
         langs = a.langs.split(",") if a.langs else cfg["scan_languages"]
         if not _keywords(a.keywords):
             sys.exit('O Radar precisa de palavras-chave: --radar --keywords "smooth jazz, phonk mix"')
